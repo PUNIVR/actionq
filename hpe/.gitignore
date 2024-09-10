@@ -1,0 +1,19 @@
+# I file delle build
+build/
+CMakeCache.txt
+
+# File temporanei
+*.tmp
+*.log
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+*.a
+*.lib
+*.lo
+*.la
+*.i
