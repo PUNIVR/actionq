@@ -6,7 +6,7 @@
 int main(int argc, char** argv) {
 
     commandLine cmdLine{argc, argv};
-    initialize();
+    initialize(NETWORK_PATH, POSE_PATH, COLORS_PATH);
     
     inference_start("/dev/video0");
     for(;;) {

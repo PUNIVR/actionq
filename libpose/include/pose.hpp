@@ -29,7 +29,7 @@ struct pose_data {
 
 extern "C" {
     /// Create TRT engine, load network
-    API void initialize();
+    API void initialize(const char* network_path, const char* pose_path, const char* colors_path);
     /// Attach to videocamera, prepare memory
     API void inference_start(const char* video);
     /// Get frame from videocamera, process frame using network, return pose

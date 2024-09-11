@@ -10,8 +10,8 @@ static const uint32_t g_overlay_flags = poseNet::OverlayFlagsFromStr("keypoints"
 static videoSource* g_camera = nullptr;
 static poseNet* g_network = nullptr;
 
-API void initialize() {
-    g_network = poseNet::Create(NETWORK_PATH, POSE_PATH, COLORS_PATH);
+API void initialize(const char* network_path, const char* pose_path, const char* colors_path) {
+    g_network = poseNet::Create(network_path, pose_path, colors_path);
     if (!g_network) {
         printf("error - unable to create network\n");
     }
