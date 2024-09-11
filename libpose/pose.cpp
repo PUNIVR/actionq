@@ -13,14 +13,14 @@ static poseNet* g_network = nullptr;
 API void initialize() {
     g_network = poseNet::Create(NETWORK_PATH, POSE_PATH, COLORS_PATH);
     if (!g_network) {
-        printf("unable to create network\n");
+        printf("error - unable to create network\n");
     }
 }
 
 API void inference_start(const char* video) {
     g_camera = videoSource::Create(video, 0, nullptr);
     if (!g_camera) {
-        printf("unable to open camera\n");
+        printf("error - unable to open camera\n");
     }
 }
 
@@ -35,7 +35,7 @@ API pose_data inference_step() {
     uchar3* image = nullptr;
     if (!g_camera->Capture(&image, 1000)) {
         if (!g_camera->IsStreaming()) {
-            printf("error capturing frame\n");
+            printf("error - unable to capture frame\n");
             result.error = 1;
             return result;
         }
@@ -44,7 +44,7 @@ API pose_data inference_step() {
     // Get pose from network
     std::vector<poseNet::ObjectPose> poses;
     if (!g_network->Process(image, g_camera->GetWidth(), g_camera->GetHeight(), poses, g_overlay_flags)) {
-        printf("error processing frame for body pose\n");
+        printf("error - unable to process frame for body pose\n");
         result.error = 2;
         return result;
     }
