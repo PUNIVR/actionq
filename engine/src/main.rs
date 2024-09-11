@@ -1,9 +1,18 @@
-use prepose::PoseEstimator;
+use tokio;
+use tokio::signal::ctrl_c;
 
-fn main() {
-    let mut pose = PoseEstimator::new(
-        "../network/pose_resnet18_body.onnx", 
-        "../network/human_pose.json", 
-        "../network/colors.txt"
-    );
+mod hpe;
+mod network;
+mod session;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let engine_proxy = hpe::run_human_pose_estimator();
+    let session_proxy = session::run_session(&engine_proxy);
+
+    network::run_websocket_server("0.0.0.0:3666", &session_proxy, &engine_proxy)
+        .await
+        .expect("Server - error");
+
+    Ok(())
 }
