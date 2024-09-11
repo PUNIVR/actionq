@@ -2,6 +2,8 @@
 build/
 CMakeCache.txt
 
+plans/*
+
 # File temporanei
 *.tmp
 *.log
