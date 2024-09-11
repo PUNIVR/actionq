@@ -20,5 +20,5 @@ target_link_libraries(hpe_trt_core jetson-inference jetson-utils)
 
 # As a test
 add_executable(hpe_trt_infer inference.cpp)
-set_target_properties(hpe_trt_infer PROPERTIES OUTPUT_NAME "test")
+set_target_properties(hpe_trt_infer PROPERTIES OUTPUT_NAME "rt_infer_webcam")
 target_link_libraries(hpe_trt_infer hpe_trt_core)
