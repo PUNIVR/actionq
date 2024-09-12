@@ -33,6 +33,9 @@ struct Session {
     in_progress: bool,
     pose_receiver: mpsc::Receiver<PoseData>,
     pose: PoseProxy,
+
+    /// Store the current exercise data
+    current_exercise_data: Vec<PoseData>,
 }
 
 #[derive(Clone)]
@@ -77,6 +80,7 @@ impl Session {
                 data_sender: final_sender,
                 pose_receiver,
                 state: SessionState::Idle,
+                current_exercise_data: vec![],
                 in_progress: false,
                 pose: pose.clone(),
             },
@@ -109,7 +113,9 @@ impl Session {
                     return;
                 }
 
+                self.current_exercise_data.clear();
                 self.pose.inference_start().await;
+
                 self.state = SessionState::ExerciseRunning;
                 println!("Session: exercise start ({})", exercise_id);
             },
@@ -154,7 +160,13 @@ impl Session {
                 // Handle data from pose estimator
                 pose_data = self.pose_receiver.recv() => {
                     if let Some(pose) = pose_data {
+
+                        // Save pose for later storage
+                        self.current_exercise_data.push(pose.clone());
+
                         // TODO: run motion analyzer
+                        
+
                         // Broadcast pose to connections
                         self.data_sender.send(pose).unwrap();
                     }
