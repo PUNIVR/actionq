@@ -1,12 +1,19 @@
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, broadcast};
 
-use crate::pose::PoseProxy;
+use crate::pose::{PoseProxy, PoseEventSender, PoseEventSink};
+use prepose::PoseData;
 
 enum Command {
+
+    /// Signal to the session controller that we are interested in receiving data
+    ConnectToDataStream { 
+        respond_to: oneshot::Sender<mpsc::Receiver<PoseData>>
+    },
+
     SessionStart,
     SessionEnd,
     ExerciseStart { 
-        exercise_id: usize
+        exercise_id: usize,
     },
     ExerciseEnd
 }
@@ -20,14 +27,22 @@ enum SessionState {
 
 struct Session {
     receiver: mpsc::Receiver<Command>,
+    output_channels: Vec<mpsc::Sender<PoseData>>,
     state: SessionState,
     in_progress: bool,
+
     pose_proxy: PoseProxy,
 }
 
 #[derive(Clone)]
 pub struct SessionProxy(mpsc::Sender<Command>);
 impl SessionProxy {
+    pub async fn connect_pose_stream(&self) -> mpsc::Receiver<PoseData> {
+        let (tx, rx) = oneshot::channel();
+        self.0.send(Command::ConnectToDataStream { respond_to: tx }).await.unwrap();
+        rx.await.unwrap()
+    }
+
     pub async fn session_start(&self) {
         self.0.send(Command::SessionStart).await.unwrap();
     }
@@ -36,7 +51,7 @@ impl SessionProxy {
     }
     pub async fn exercise_start(&self, exercise_id: usize) {
         self.0.send(Command::ExerciseStart {
-            exercise_id, 
+            exercise_id
         }).await.unwrap();
     }
     pub async fn exercise_end(&self) {
@@ -46,10 +61,12 @@ impl SessionProxy {
 
 impl Session {
     fn instantiate(pose_proxy: &PoseProxy) -> (Self, SessionProxy) {
+        // Channel used to comunicate with actor
         let (tx, rx) = mpsc::channel(100);
         (
             Self {
                 receiver: rx,
+                output_channels: vec![],
                 state: SessionState::Idle,
                 in_progress: false,
                 pose_proxy: pose_proxy.clone(),
@@ -60,6 +77,13 @@ impl Session {
 
     async fn handle_command(&mut self, cmd: Command) {
         match cmd {
+
+            Command::ConnectToDataStream { respond_to } => {
+                let (tx, rx) = mpsc::channel(100);
+                self.output_channels.push(tx);
+                respond_to.send(rx).unwrap();
+            }
+
             Command::SessionStart => {
                 if self.state != SessionState::Idle {
                     println!("Session: invalid state for session start");
@@ -77,8 +101,8 @@ impl Session {
                     return;
                 }
 
-                // TODO: change current exercise analyzer
-                self.pose_proxy.inference_start().await;
+                // TODO: handle multiple connections to inference data
+                self.pose_proxy.inference_start(self.output_channels.clone()).await;
 
                 self.state = SessionState::ExerciseRunning;
                 println!("Session: exercise start ({})", exercise_id);

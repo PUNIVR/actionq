@@ -283,6 +283,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-tungstenite",
+ "tungstenite",
 ]
 
 [[package]]

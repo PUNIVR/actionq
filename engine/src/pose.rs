@@ -4,13 +4,17 @@ use tokio::sync::oneshot;
 
 use prepose::*;
 
-pub struct PoseData {}
-
 // Receiver for HPE data
-pub struct PoseEventSink(broadcast::Receiver<PoseData>);
+#[derive(Debug)]
+pub struct PoseEventSink(pub broadcast::Receiver<PoseData>);
+// Send HPE data
+#[derive(Debug)]
+pub struct PoseEventSender(pub broadcast::Sender<PoseData>);
 
 pub enum Command {
-    InferenceStart,
+    InferenceStart {
+        outputs: Vec<mpsc::Sender<PoseData>>
+    },
     InferenceStop,
 
     /// Request a direct connection to the pose output
@@ -23,8 +27,10 @@ pub enum Command {
 pub struct PoseProxy(mpsc::Sender<Command>);
 impl PoseProxy {
 
-    pub async fn inference_start(&self) {
-        self.0.send(Command::InferenceStart).await.unwrap();
+    pub async fn inference_start(&self, outputs: Vec<mpsc::Sender<PoseData>>) {
+        self.0.send(Command::InferenceStart {
+            outputs
+        }).await.unwrap();
     }
 
     pub async fn inference_end(&self) {
@@ -44,7 +50,7 @@ impl PoseProxy {
 /// Pose estimator and analyzer
 struct Pose {
     receiver: mpsc::Receiver<Command>,
-    output: Option<broadcast::Sender<PoseEventSink>>,
+    outputs: Option<Vec<mpsc::Sender<PoseData>>>,
     engine: PoseEstimator,
     is_running: bool,
 }
@@ -60,7 +66,7 @@ impl Pose {
         (
             Pose {
                 receiver,
-                output: None,
+                outputs: None,
                 engine,
                 is_running: false
             },
@@ -70,13 +76,15 @@ impl Pose {
 
     fn handle_message(&mut self, msg: Command) {
         match msg {
-            Command::InferenceStart => {
+            Command::InferenceStart { outputs } => {
                 self.engine.inference_start("/dev/video0");
                 self.is_running = true;
+                self.outputs = Some(outputs);
             }
             Command::InferenceStop => {
                 self.engine.inference_end();
                 self.is_running = false;
+                self.outputs = None;
             }
             /// Request a direct connection to the pose output
             Command::RequestDataStream { respond_to } => todo!()
@@ -86,12 +94,20 @@ impl Pose {
     pub async fn run(mut self) {
         tokio::task::block_in_place(move || {
             loop {
-                // Generate a pose estimation
                 if self.is_running {
-                    println!("pose - inference");
-
+                    //println!("pose - inference");
+                    
+                    // Generate a pose estimation and output to channel
                     let pose = self.engine.inference_step();
-                    println!("{:?}", pose);
+                    if let Some(ref outputs) = self.outputs {
+                        if let Some(pose) = pose {
+                            
+                            // We don't care if there aren't any receiver...
+                            for sender in outputs {
+                                let _ = sender.blocking_send(pose.clone());
+                            }
+                        }
+                    }
 
                     // Try handle command
                     if let Ok(msg) = self.receiver.try_recv() {

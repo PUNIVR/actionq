@@ -2,10 +2,10 @@ use std::os::raw::{c_char, c_int};
 use std::ffi::CString;
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Keypoint {
-    x: f32,
-    y: f32
+    pub x: f32,
+    pub y: f32
 }
 
 #[repr(C)]
@@ -16,11 +16,11 @@ struct LibPoseData {
     error: c_int
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PoseData {
-    subjects: usize,
-    valid_kps: usize,
-    kps: [Keypoint; 20] 
+    pub subjects: usize,
+    pub valid_kps: usize,
+    pub kps: [Keypoint; 20] 
 }
 
 impl From<LibPoseData> for Option<PoseData> {
