@@ -2,10 +2,10 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::accept_async;
+use tokio_tungstenite::{accept_async, WebSocketStream};
 
 use crate::{
-    hpe::{EngineProxy, PoseEventSink},
+    pose::{PoseProxy, PoseEventSink},
     session::SessionProxy,
 };
 
@@ -23,11 +23,12 @@ pub enum Requests {
     },
     /// End the current session in progress
     SessionEnd,
-    //TODO: Start an exercise evaluation
-    //ExerciseStart,
-
-    //TODO: Stop the current exercise evaluation in progress
-    //ExerciseEnd,
+    /// Start an exercise evaluation
+    ExerciseStart {
+        exercise_id: usize
+    },
+    /// Stop the current exercise evaluation in progress
+    ExerciseEnd,
 }
 
 /// Possible responses from the client
@@ -39,6 +40,13 @@ pub enum Responses {
         already_in_progress: bool,
     },
     SessionEnd,
+    ExerciseStart,
+    ExerciseEnd,
+}
+
+async fn send_response(ws_stream: &mut WebSocketStream<TcpStream>, response: Responses) {
+    let json = serde_json::to_string(&response).unwrap();
+    ws_stream.send(json.into()).await.unwrap();
 }
 
 /// Handles a single connection, sends messages to controller and sends data to client
@@ -46,7 +54,7 @@ async fn run_connection(
     peer: SocketAddr,
     stream: TcpStream,
     session_proxy: SessionProxy,
-    engine_proxy: EngineProxy,
+    pose_proxy: PoseProxy,
 ) {
     let mut ws_stream = accept_async(stream)
         .await
@@ -66,17 +74,23 @@ async fn run_connection(
 
                     match request {
                         Requests::SessionStart { is_controller } => {
-                            let response = Responses::SessionConnect {
+                            session_proxy.session_start().await;
+                            
+                            send_response(&mut ws_stream, Responses::SessionConnect {
                                 already_in_progress: is_controller, // NOTE: just for testing...
-                            };
-
-                            let json = serde_json::to_string(&response).unwrap();
-                            ws_stream.send(json.into()).await.unwrap();
+                            }).await;
                         }
                         Requests::SessionEnd => {
-                            let response = Responses::SessionEnd;
-                            let json = serde_json::to_string(&response).unwrap();
-                            ws_stream.send(json.into()).await.unwrap();
+                            session_proxy.session_end().await;
+                            send_response(&mut ws_stream, Responses::SessionEnd).await;
+                        },
+                        Requests::ExerciseStart { exercise_id } => {
+                            session_proxy.exercise_start(exercise_id).await;
+                            send_response(&mut ws_stream, Responses::ExerciseStart).await;
+                        },
+                        Requests::ExerciseEnd => {
+                            session_proxy.exercise_end().await;
+                            send_response(&mut ws_stream, Responses::ExerciseEnd).await;
                         }
                     }
                 } else {
@@ -95,7 +109,7 @@ async fn run_connection(
 pub async fn run_websocket_server(
     addr: &str,
     session_proxy: &SessionProxy,
-    engine_proxy: &EngineProxy,
+    pose_proxy: &PoseProxy,
 ) -> ServerResult {
     let listener = TcpListener::bind(addr).await?;
 
@@ -106,7 +120,7 @@ pub async fn run_websocket_server(
             peer,
             stream,
             session_proxy.clone(),
-            engine_proxy.clone(),
+            pose_proxy.clone(),
         ));
     }
     Ok(())
