@@ -12,82 +12,78 @@ pub struct PoseEventSink(pub broadcast::Receiver<PoseData>);
 pub struct PoseEventSender(pub broadcast::Sender<PoseData>);
 
 pub enum Command {
-    InferenceStart {
-        outputs: Vec<mpsc::Sender<PoseData>>
-    },
+    InferenceStart,
     InferenceStop,
-
-    /// Request a direct connection to the pose output
-    RequestDataStream {
-        respond_to: oneshot::Sender<PoseEventSink>,
-    },
 }
 
 #[derive(Clone)]
-pub struct PoseProxy(mpsc::Sender<Command>);
+pub struct PoseProxy {
+    commands: mpsc::Sender<Command>
+}
+
 impl PoseProxy {
 
-    pub async fn inference_start(&self, outputs: Vec<mpsc::Sender<PoseData>>) {
-        self.0.send(Command::InferenceStart {
-            outputs
-        }).await.unwrap();
+    pub async fn inference_start(&self) {
+        self.commands.send(Command::InferenceStart).await.unwrap();
     }
 
     pub async fn inference_end(&self) {
-        self.0.send(Command::InferenceStop).await.unwrap();
-    }
-
-    pub async fn request_data_stream(&self) -> PoseEventSink {
-        let (tx, rx) = oneshot::channel();
-        self.0
-            .send(Command::RequestDataStream { respond_to: tx })
-            .await
-            .unwrap();
-        rx.await.unwrap()
+        self.commands.send(Command::InferenceStop).await.unwrap();
     }
 }
 
 /// Pose estimator and analyzer
 struct Pose {
-    receiver: mpsc::Receiver<Command>,
-    outputs: Option<Vec<mpsc::Sender<PoseData>>>,
+    cmd_receiver: mpsc::Receiver<Command>,
+    data_sender: mpsc::Sender<PoseData>,
     engine: PoseEstimator,
     is_running: bool,
 }
 
 impl Pose {
-    pub fn instantiate() -> (Self, PoseProxy) {
-        let (sender, receiver) = mpsc::channel(100);
+    pub fn instantiate() -> (Self, PoseProxy, mpsc::Receiver<PoseData>) {
+
+        // Channel for commands
+        let (cmd_sender, cmd_receiver) = mpsc::channel(100);
+
+        // Channel for data output
+        let (data_sender, data_receiver) = mpsc::channel(100);
+
+        // Connect to prepose library
         let engine = PoseEstimator::new(
             "network/pose_resnet18_body.onnx", 
             "network/human_pose.json", 
             "network/colors.txt"
         );
+        
         (
             Pose {
-                receiver,
-                outputs: None,
+                cmd_receiver,
+                data_sender,
                 engine,
                 is_running: false
             },
-            PoseProxy(sender),
+            PoseProxy {
+                commands: cmd_sender,
+            },
+            data_receiver
         )
     }
 
     fn handle_message(&mut self, msg: Command) {
         match msg {
-            Command::InferenceStart { outputs } => {
-                self.engine.inference_start("/dev/video0");
-                self.is_running = true;
-                self.outputs = Some(outputs);
+            Command::InferenceStart => {
+                if !self.is_running {
+                    self.engine.inference_start("/dev/video0");
+                    self.is_running = true;
+                }
             }
             Command::InferenceStop => {
-                self.engine.inference_end();
-                self.is_running = false;
-                self.outputs = None;
+                if self.is_running {
+                    self.engine.inference_end();
+                    self.is_running = false;
+                }
             }
-            /// Request a direct connection to the pose output
-            Command::RequestDataStream { respond_to } => todo!()
         }
     }
 
@@ -95,22 +91,15 @@ impl Pose {
         tokio::task::block_in_place(move || {
             loop {
                 if self.is_running {
-                    //println!("pose - inference");
                     
                     // Generate a pose estimation and output to channel
                     let pose = self.engine.inference_step();
-                    if let Some(ref outputs) = self.outputs {
-                        if let Some(pose) = pose {
-                            
-                            // We don't care if there aren't any receiver...
-                            for sender in outputs {
-                                let _ = sender.blocking_send(pose.clone());
-                            }
-                        }
+                    if let Some(pose) = pose {                            
+                        self.data_sender.blocking_send(pose).unwrap();
                     }
 
                     // Try handle command
-                    if let Ok(msg) = self.receiver.try_recv() {
+                    if let Ok(msg) = self.cmd_receiver.try_recv() {
                         self.handle_message(msg);
                     }
 
@@ -118,7 +107,7 @@ impl Pose {
                     //std::thread::sleep(std::time::Duration::from_millis(10));
 
                 } else {
-                    if let Some(msg) = self.receiver.blocking_recv() {
+                    if let Some(msg) = self.cmd_receiver.blocking_recv() {
                         println!("pose - received message");
                         self.handle_message(msg);
                     }
@@ -128,8 +117,8 @@ impl Pose {
     }
 }
 
-pub fn run_human_pose_estimator() -> PoseProxy {
-    let (engine, proxy) = Pose::instantiate();
+pub fn run_human_pose_estimator() -> (PoseProxy, mpsc::Receiver<PoseData>) {
+    let (engine, proxy, pose_receiver) = Pose::instantiate();
     tokio::spawn(engine.run());
-    proxy
+    (proxy, pose_receiver)
 }

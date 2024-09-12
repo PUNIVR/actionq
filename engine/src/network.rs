@@ -20,10 +20,7 @@ type ServerResult = Result<(), Box<dyn std::error::Error>>;
 pub enum Requests {
     /// Starts a new session, if one is already in progress then connect to that
     /// session without starting a new one
-    SessionStart {
-        /// If true this connection can command the session execution
-        is_controller: bool,
-    },
+    SessionStart,
     /// End the current session in progress
     SessionEnd,
     /// Start an exercise evaluation
@@ -114,8 +111,8 @@ async fn run_connection(
     kill_tx: broadcast::Sender<()>,
     peer: SocketAddr,
     stream: TcpStream,
-    session_proxy: SessionProxy,
-    pose_proxy: PoseProxy,
+    session: SessionProxy,
+    pose: PoseProxy,
 ) {
     let mut ws_stream = accept_async(stream).await
         .expect("unable to accept WebSocket connection");
@@ -126,7 +123,7 @@ async fn run_connection(
     let mut kill_rx = kill_tx.subscribe();
 
     // Request a data channel connection
-    let mut data_rx = session_proxy.connect_pose_stream().await;
+    let mut data_receiver = session.connect_output_stream().await;
 
     // Process all events 
     loop {
@@ -137,22 +134,22 @@ async fn run_connection(
                 let msg = client_packet.unwrap();
                 if let Some(request) = handle_message(&mut ws_stream, msg.unwrap()).await {
                     match request {
-                        Requests::SessionStart { is_controller } => {
-                            session_proxy.session_start().await;
+                        Requests::SessionStart => {
+                            session.session_start().await;
                             send_response(&mut ws_stream, Responses::SessionConnect {
-                                already_in_progress: is_controller, // NOTE: just for testing...
+                                already_in_progress: false, // NOTE: just for testing...
                             }).await;
                         }
                         Requests::SessionEnd => {
-                            session_proxy.session_end().await;
+                            session.session_end().await;
                             send_response(&mut ws_stream, Responses::SessionEnd).await;
                         },
                         Requests::ExerciseStart { exercise_id } => {
-                            session_proxy.exercise_start(exercise_id).await;
+                            session.exercise_start(exercise_id).await;
                             send_response(&mut ws_stream, Responses::ExerciseStart).await;
                         },
                         Requests::ExerciseEnd => {
-                            session_proxy.exercise_end().await;
+                            session.exercise_end().await;
                             send_response(&mut ws_stream, Responses::ExerciseEnd).await;
                         },
                         Requests::CloseAll => {
@@ -164,8 +161,8 @@ async fn run_connection(
             }
 
             // Handle direct output data stream from the rest of the engine
-            engine_data = data_rx.recv() => {
-                if let Some(pose) = engine_data {
+            engine_data = data_receiver.recv() => {
+                if let Ok(pose) = engine_data {
                     send_response(&mut ws_stream, Responses::ExerciseUpdate {
                         pose: pose.into()
                     }).await;
@@ -190,7 +187,7 @@ pub async fn run_websocket_server(
     let listener = TcpListener::bind(addr).await?;
 
     // Cancellation controller for all connections
-    let (kill_tx, mut kill_rx) = broadcast::channel(100);
+    let (kill_tx, kill_rx) = broadcast::channel(100);
     drop(kill_rx);
 
     println!("WebSocket - waiting connection");

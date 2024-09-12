@@ -7,10 +7,9 @@ mod session;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let pose_proxy = pose::run_human_pose_estimator();
-    let session_proxy = session::run_session(&pose_proxy);
-
-    network::run_websocket_server("0.0.0.0:3666", &session_proxy, &pose_proxy)
+    let (pose, pose_receiver) = pose::run_human_pose_estimator();
+    let session = session::run_session(&pose, pose_receiver);
+    network::run_websocket_server("0.0.0.0:3666", &session, &pose)
         .await
         .expect("Server - error");
 

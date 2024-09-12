@@ -7,7 +7,7 @@ enum Command {
 
     /// Signal to the session controller that we are interested in receiving data
     ConnectToDataStream { 
-        respond_to: oneshot::Sender<mpsc::Receiver<PoseData>>
+        respond_to: oneshot::Sender<broadcast::Receiver<PoseData>>
     },
 
     SessionStart,
@@ -27,17 +27,19 @@ enum SessionState {
 
 struct Session {
     receiver: mpsc::Receiver<Command>,
-    output_channels: Vec<mpsc::Sender<PoseData>>,
+    data_sender: broadcast::Sender<PoseData>,
     state: SessionState,
+    
     in_progress: bool,
-
-    pose_proxy: PoseProxy,
+    pose_receiver: mpsc::Receiver<PoseData>,
+    pose: PoseProxy,
 }
 
 #[derive(Clone)]
 pub struct SessionProxy(mpsc::Sender<Command>);
 impl SessionProxy {
-    pub async fn connect_pose_stream(&self) -> mpsc::Receiver<PoseData> {
+
+    pub async fn connect_output_stream(&self) -> broadcast::Receiver<PoseData> {
         let (tx, rx) = oneshot::channel();
         self.0.send(Command::ConnectToDataStream { respond_to: tx }).await.unwrap();
         rx.await.unwrap()
@@ -60,16 +62,23 @@ impl SessionProxy {
 }
 
 impl Session {
-    fn instantiate(pose_proxy: &PoseProxy) -> (Self, SessionProxy) {
+    fn instantiate(pose: &PoseProxy, pose_receiver: mpsc::Receiver<PoseData>) -> (Self, SessionProxy) {
+
+        // Broadcast channel used to send analyzed data
+        let (final_sender, final_receiver) = broadcast::channel(100);
+        drop(final_receiver);
+
         // Channel used to comunicate with actor
         let (tx, rx) = mpsc::channel(100);
+
         (
             Self {
                 receiver: rx,
-                output_channels: vec![],
+                data_sender: final_sender,
+                pose_receiver,
                 state: SessionState::Idle,
                 in_progress: false,
-                pose_proxy: pose_proxy.clone(),
+                pose: pose.clone(),
             },
             SessionProxy(tx),
         )
@@ -79,9 +88,8 @@ impl Session {
         match cmd {
 
             Command::ConnectToDataStream { respond_to } => {
-                let (tx, rx) = mpsc::channel(100);
-                self.output_channels.push(tx);
-                respond_to.send(rx).unwrap();
+                let data_receiver = self.data_sender.subscribe();
+                respond_to.send(data_receiver).unwrap();
             }
 
             Command::SessionStart => {
@@ -101,9 +109,7 @@ impl Session {
                     return;
                 }
 
-                // TODO: handle multiple connections to inference data
-                self.pose_proxy.inference_start(self.output_channels.clone()).await;
-
+                self.pose.inference_start().await;
                 self.state = SessionState::ExerciseRunning;
                 println!("Session: exercise start ({})", exercise_id);
             },
@@ -113,7 +119,7 @@ impl Session {
                     return;
                 }
 
-                self.pose_proxy.inference_end().await;
+                self.pose.inference_end().await;
 
                 self.state = SessionState::SessionIdle;
                 println!("Session: exercise end");
@@ -135,14 +141,31 @@ impl Session {
 
     async fn run(mut self) {
         println!("Session - run");
-        while let Some(cmd) = self.receiver.recv().await {
-            self.handle_command(cmd).await;
+        loop {
+            tokio::select! {
+
+                // Handle commands from other actors
+                cmd_data = self.receiver.recv() => {
+                    if let Some(cmd) = cmd_data {
+                        self.handle_command(cmd).await;
+                    }
+                },
+
+                // Handle data from pose estimator
+                pose_data = self.pose_receiver.recv() => {
+                    if let Some(pose) = pose_data {
+                        // TODO: run motion analyzer
+                        // Broadcast pose to connections
+                        self.data_sender.send(pose).unwrap();
+                    }
+                }
+            }
         }
     }
 }
 
-pub fn run_session(pose_proxy: &PoseProxy) -> SessionProxy {
-    let (session, proxy) = Session::instantiate(pose_proxy);
+pub fn run_session(pose: &PoseProxy, pose_receiver: mpsc::Receiver<PoseData>) -> SessionProxy {
+    let (session, proxy) = Session::instantiate(pose, pose_receiver);
     tokio::spawn(session.run());
     proxy
 }
