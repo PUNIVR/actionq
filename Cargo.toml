@@ -1,2 +1,2 @@
 [workspace]
-members = ["prepose", "engine"]
+members = ["prepose", "engine", "motion"]
