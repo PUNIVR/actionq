@@ -1,2 +1,6 @@
 [workspace]
-members = ["prepose", "engine"]
+members = ["prepose", "engine", "motion"]
+resolver = "2"
+
+[build]
+incremental = true

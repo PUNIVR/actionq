@@ -1,0 +1,38 @@
+{
+  "exercise_id": "sample",
+  "required_control_factors": [
+    "feet_distance_x"
+  ],
+  "states": [
+    "idle",
+    "small_distance",
+    "big_distance"
+  ],
+  "global_transitions": [],
+  "state_transitions": [
+    {
+      "state": "idle",
+      "transitions": [
+        {}
+      ]
+    },
+    {
+      "state": "small_distance",
+      "transitions": [
+        {
+          "to": "big_distance",
+          "duration": 1000.0,
+          "emit": [
+            "repetition_complete"
+          ],
+          "conditions": [
+            {
+              "type": "big",
+              "control_factor": "feet_distance_x"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

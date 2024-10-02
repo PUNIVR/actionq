@@ -26,7 +26,7 @@ struct keypoint {
 struct pose_data {
     int detected_subjects;
     int detected_kps;
-    keypoint kps[20];
+    keypoint kps[18];
     int error;
 };
 
@@ -89,12 +89,14 @@ API pose_data inference_step() {
 
     // Construct pose stimation result
     result.detected_subjects = poses.size();
-    result.detected_kps = poses[0].Keypoints.size();
-
-    for (int i = 0; i < result.detected_kps; i++) {
-        const auto& kp = poses[0].Keypoints[i];
-        result.kps[i].x = kp.x;
-        result.kps[i].y = kp.y;
+    if (result.detected_subjects != 0) {
+        result.detected_kps = poses[0].Keypoints.size();
+        
+        for (int i = 0; i < result.detected_kps; i++) {
+            const auto& kp = poses[0].Keypoints[i];
+            result.kps[i].x = kp.x;
+            result.kps[i].y = kp.y;
+        }
     }
 
     return result;

@@ -1,0 +1,99 @@
+# exercise: squat
+
+states:
+- setup
+- high_stance
+- low_stance
+
+initial_state: setup
+
+state_warnings:
+
+  # Le braccia devono essere orizzontali rispetto al terreno e la schiena dritta
+  high_stance:
+
+  - name: braccia_non_orizzontali
+    description: blah blah blah
+    condition: 
+      control_factor: orizzontal_angle_arm 
+      condition: !NotInRange
+        range:
+          start: -12.0
+          end: 12.0
+
+  - name: braccia_non_distese
+    description: blah
+    condition:
+      control_factor: angle_elbow
+      condition: !NotInRange
+        range:
+          start: 185.0
+          end: 175.0
+
+  - name: schiena_non_dritta
+    description: blah blah blah
+    condition:
+      control_factor: vertical_angle_torso
+      condition: !NotInRange
+        range:
+          start: -5.0
+          end: 5.0
+
+  # Dobbiamo essere nella posizione corretta per iniziare l'esercizio
+  setup:
+  - name: incorrect_initial_state_1
+    description: blah blah blah
+    condition:
+      control_factor: feet_distance
+      condition: !InRange
+        range:
+          start: -10.0
+          end: 10.0
+
+  # Le braccia devono essere orizzontali rispetto al terreno, la schiena leggermente piegata in avanti,
+  # il ginocchio oltre i piedi
+  low_stance:
+  - name: feet_too_clone_for_confort
+    description: blah blah blah
+    condition:
+      control_factor: feet_distance
+      condition: !InRange
+        range:
+          start: -6.0
+          end: 6.0
+
+# Transizioni di stato, devono controllare posizioni del corpo uniche rispetto al loro stato
+state_transitions:
+
+  high_distance:
+  - conditions:
+    - control_factor: angle_knee
+      condition: !InRange
+        range:
+          start: -10.0
+          end: 10.0
+    to: low_stance
+    emit: []
+
+  setup:
+  - conditions:
+    - control_factor: angle_knee
+      condition: !NotInRange
+        range:
+          start: -10.0
+          end: 10.0
+    to: high_stance
+    emit: []
+
+  low_stance:
+  - conditions:
+    - control_factor: angle_knee
+      condition: !NotInRange
+        range:
+          start: -10.0
+          end: 10.0
+    to: high_stance
+    emit:
+    - RepetitionComplete
+
+global_warnings: null

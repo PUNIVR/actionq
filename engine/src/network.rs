@@ -6,10 +6,11 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::{accept_async, WebSocketStream};
 use tungstenite::protocol::Message;
+use glam::Vec2;
 
 use crate::{
-    pose::{PoseEventSink, PoseProxy},
-    session::SessionProxy,
+    pose::{PoseProxy, PoseEventSink},
+    session::{SessionProxy, SessionPoseData},
 };
 
 type ServerResult = Result<(), Box<dyn std::error::Error>>;
@@ -37,11 +38,11 @@ struct JsonKeypoint {
     y: f32,
 }
 
-impl From<Keypoint> for JsonKeypoint {
-    fn from(item: Keypoint) -> Self {
-        Self {
-            x: item.x,
-            y: item.y,
+impl From<Vec2> for JsonKeypoint {
+    fn from(item: Vec2) -> Self {
+        Self { 
+            x: item.x, 
+            y: item.y 
         }
     }
 }
@@ -51,9 +52,9 @@ struct JsonPoseData {
     keypoints: [JsonKeypoint; 20],
 }
 
-impl From<PoseData> for JsonPoseData {
-    fn from(item: PoseData) -> Self {
-        let mut keypoints: [JsonKeypoint; 20] = [JsonKeypoint { x: 0.0, y: 0.0 }; 20];
+impl From<SessionPoseData> for JsonPoseData {
+    fn from(item: SessionPoseData) -> Self {
+        let mut keypoints: [JsonKeypoint; 20] = [JsonKeypoint{x:0.0,y:0.0}; 20];
         for i in 0..item.kps.len() {
             keypoints[i].x = item.kps[i].x;
             keypoints[i].y = item.kps[i].y;
