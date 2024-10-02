@@ -49,11 +49,15 @@ impl Pose {
         let (data_sender, data_receiver) = mpsc::channel(100);
 
         // Connect to prepose library
+        tracing::info!("initializing TRT engine");
+
         let engine = PoseEstimator::new(
             "network/pose_resnet18_body.onnx",
             "network/human_pose.json",
             "network/colors.txt",
         );
+
+        tracing::info!("TRT engine ready");
 
         (
             Pose {
@@ -69,18 +73,19 @@ impl Pose {
         )
     }
 
+    #[tracing::instrument(skip_all, fields(msg))]
     fn handle_message(&mut self, msg: Command) {
         match msg {
             Command::InferenceStart => {
                 if !self.is_running {
-                    tracing::trace!("inference start");
+                    tracing::info!("inference started");
                     self.engine.inference_start("/dev/video0");
                     self.is_running = true;
                 }
             }
             Command::InferenceStop => {
                 if self.is_running {
-                    tracing::trace!("inference stop");
+                    tracing::info!("inference ended");
                     self.engine.inference_end();
                     self.is_running = false;
                 }
@@ -88,8 +93,8 @@ impl Pose {
         }
     }
 
-    #[tracing::instrument]
-    pub async fn run(mut self) {
+    #[tracing::instrument(skip_all)]
+    pub async fn run_pose_estimator(mut self) {
         tokio::task::block_in_place(move || {
             loop {
                 if self.is_running {
@@ -105,7 +110,7 @@ impl Pose {
                     }
                 } else {
                     if let Some(msg) = self.cmd_receiver.blocking_recv() {
-                        println!("pose - received message");
+                        tracing::trace!("received message");
                         self.handle_message(msg);
                     }
                 }
@@ -116,6 +121,6 @@ impl Pose {
 
 pub fn run_human_pose_estimator() -> (PoseProxy, mpsc::Receiver<PoseData>) {
     let (engine, proxy, pose_receiver) = Pose::instantiate();
-    tokio::spawn(engine.run());
+    tokio::spawn(engine.run_pose_estimator());
     (proxy, pose_receiver)
 }

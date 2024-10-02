@@ -1,5 +1,4 @@
 use futures_util::{SinkExt, StreamExt};
-use prepose::{Keypoint, PoseData};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
@@ -86,6 +85,7 @@ async fn send_response(ws_stream: &mut WebSocketStream<TcpStream>, response: Res
     ws_stream.send(json.into()).await.unwrap();
 }
 
+#[tracing::instrument(skip_all, fields(msg))]
 async fn handle_message(
     ws_stream: &mut WebSocketStream<TcpStream>,
     msg: Message,
@@ -94,7 +94,6 @@ async fn handle_message(
         // Try to deserialize command received
         if let Ok(json) = msg.into_text() {
             if let Ok(request) = serde_json::from_str::<Requests>(&json) {
-                println!("{:?}", request);
                 ws_stream.send("command received".into()).await.unwrap();
                 return Some(request);
             }
@@ -108,8 +107,9 @@ async fn handle_message(
 }
 
 /// Handles a single connection, sends messages to controller and sends data to client
-#[tracing::instrument]
+#[tracing::instrument(skip_all, fields(peer = %peer, connection_id))]
 async fn run_connection(
+    connection_id: usize,
     kill_tx: broadcast::Sender<()>,
     peer: SocketAddr,
     stream: TcpStream,
@@ -135,6 +135,8 @@ async fn run_connection(
             // Handle incomming requests from the client
             client_packet = ws_stream.next() => {
                 let msg = client_packet.unwrap();
+                tracing::trace!("received message");
+
                 if let Some(request) = handle_message(&mut ws_stream, msg.unwrap()).await {
                     match request {
                         Requests::SessionStart => {
@@ -188,7 +190,7 @@ async fn run_connection(
 }
 
 /// Accepts incomming connections and spawns handlers.
-#[tracing::instrument]
+#[tracing::instrument(skip_all)]
 pub async fn run_websocket_server(
     addr: &str,
     session_proxy: &SessionProxy,
@@ -200,17 +202,22 @@ pub async fn run_websocket_server(
     let (kill_tx, kill_rx) = broadcast::channel(100);
     drop(kill_rx);
 
+    
     tracing::info!("waiting connection");
+    let mut connection_id = 0;
     while let Ok((stream, _)) = listener.accept().await {
         let peer = stream.peer_addr()?;
         tracing::info!("spawn connecion handler");
         tokio::spawn(run_connection(
+            connection_id,
             kill_tx.clone(),
             peer,
             stream,
             session_proxy.clone(),
             pose_proxy.clone(),
         ));
+
+        connection_id += 1;
     }
     Ok(())
 }

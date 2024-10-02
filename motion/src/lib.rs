@@ -116,12 +116,14 @@ pub trait GenControlFactors {
     fn control_factors(&self) -> ControlFactorMap;
 }
 
+#[derive(Debug)]
 struct WarningProgress {
     warning: Warning,
     threshold: f32,
     progress: f32,
 }
 
+#[derive(Debug)]
 pub struct MotionAnalyzer<E> {
     state_id: StateId,
     warnings_progress: Vec<WarningProgress>,

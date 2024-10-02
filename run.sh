@@ -1,7 +1,6 @@
 #!/bin/bash
 
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:prepose/libs
-./target/debug/prepare_engine
-ENGINE_PID=$!
+RUST_LOG=none,prepare_engine=trace,prepose=trace,motion=trace ./target/debug/prepare_engine
 
 

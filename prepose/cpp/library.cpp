@@ -48,21 +48,24 @@ static videoSource* g_camera = nullptr;
 static poseNet* g_network = nullptr;
 
 API void initialize(const char* network_path, const char* pose_path, const char* colors_path) {
+
+    // TODO: find a way to handel this logger better
+    Log::SetLevel(Log::Level::ERROR);
+
     g_network = poseNet::Create(network_path, pose_path, colors_path);
     if (!g_network) {
-        printf("error - unable to create network\n");
+        printf("[TRT] error: unable to create network\n");
     }
 }
 
 API void inference_start(const char* video) {
     g_camera = videoSource::Create(video, 0, nullptr);
     if (!g_camera) {
-        printf("error - unable to open camera\n");
+        printf("[TRT] error: unable to open camera\n");
     }
 }
 
 API void inference_end() {
-    printf("info - inference stop\n");
     SAFE_DELETE(g_camera);
 }
 
@@ -73,7 +76,7 @@ API pose_data inference_step() {
     uchar3* image = nullptr;
     if (!g_camera->Capture(&image, 1000)) {
         if (!g_camera->IsStreaming()) {
-            printf("error - unable to capture frame\n");
+            printf("[TRT] error: unable to capture frame\n");
             result.error = 1;
             return result;
         }
@@ -82,7 +85,7 @@ API pose_data inference_step() {
     // Get pose from network
     std::vector<poseNet::ObjectPose> poses;
     if (!g_network->Process(image, g_camera->GetWidth(), g_camera->GetHeight(), poses, g_overlay_flags)) {
-        printf("error - unable to process frame for body pose\n");
+        printf("[TRT] error: unable to process frame for body pose\n");
         result.error = 2;
         return result;
     }

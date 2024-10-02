@@ -34,7 +34,7 @@ enum Command {
     ExerciseEnd,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum SessionState {
     Idle,
     SessionIdle,
@@ -222,7 +222,7 @@ impl GenControlFactors for SessionPoseData {
     }
 }
 
-
+#[derive(Debug)]
 struct Session {
     receiver: mpsc::Receiver<Command>,
     data_sender: broadcast::Sender<SessionPoseData>,
@@ -294,6 +294,7 @@ impl Session {
         )
     }
 
+    #[tracing::instrument(skip_all, fields(cmd))]
     async fn handle_command(&mut self, cmd: Command) {
         match cmd {
             Command::ConnectToDataStream { respond_to } => {
@@ -303,18 +304,18 @@ impl Session {
 
             Command::SessionStart => {
                 if self.state != SessionState::Idle {
-                    println!("Session: invalid state for session start");
+                    tracing::warn!("invalid state for session start");
                     return;
                 }
 
                 // TODO: load exercises collection
 
                 self.state = SessionState::SessionIdle;
-                println!("Session: session start");
+                tracing::info!("session started");
             }
             Command::ExerciseStart { exercise_id } => {
                 if self.state != SessionState::SessionIdle {
-                    println!("Session: invalid state for exercise start");
+                    tracing::warn!("invalid state for exercise start");
                     return;
                 }
 
@@ -325,36 +326,36 @@ impl Session {
                 self.pose.inference_start().await;
 
                 self.state = SessionState::ExerciseRunning;
-                println!("Session: exercise start ({})", exercise_id);
+                tracing::info!("exercise started ({})", exercise_id);
             }
             Command::ExerciseEnd => {
                 if self.state != SessionState::ExerciseRunning {
-                    println!("Session: invalid state for exercise end");
+                    tracing::warn!("invalid state for exercise end");
                     return;
                 }
 
                 self.pose.inference_end().await;
 
                 self.state = SessionState::SessionIdle;
-                println!("Session: exercise end");
+                tracing::info!("exercise ended");
             }
             Command::SessionEnd => {
                 if self.state != SessionState::SessionIdle {
-                    println!("Session: invalid state for session end");
+                    tracing::warn!("invalid state for session end");
                     return;
                 }
 
                 // TODO: save to database
 
-                println!("Session: session end");
+                tracing::info!("session ended");
                 self.state = SessionState::Idle;
             }
             _ => todo!(),
         }
     }
 
-    async fn run(mut self) {
-        println!("Session - run");
+    #[tracing::instrument(skip_all)]
+    async fn run_session(mut self) {
         loop {
             tokio::select! {
 
@@ -402,6 +403,6 @@ impl Session {
 
 pub fn run_session(pose: &PoseProxy, pose_receiver: mpsc::Receiver<PoseData>) -> SessionProxy {
     let (session, proxy) = Session::instantiate(pose, pose_receiver);
-    tokio::spawn(session.run());
+    tokio::spawn(session.run_session());
     proxy
 }
