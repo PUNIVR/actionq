@@ -1,14 +1,14 @@
 use futures_util::{SinkExt, StreamExt};
+use prepose::{Keypoint, PoseData};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::{accept_async, WebSocketStream};
-use tokio::sync::{mpsc, broadcast};
 use tungstenite::protocol::Message;
-use prepose::{PoseData, Keypoint};
 
 use crate::{
-    pose::{PoseProxy, PoseEventSink},
+    pose::{PoseEventSink, PoseProxy},
     session::SessionProxy,
 };
 
@@ -24,9 +24,7 @@ pub enum Requests {
     /// End the current session in progress
     SessionEnd,
     /// Start an exercise evaluation
-    ExerciseStart {
-        exercise_id: usize
-    },
+    ExerciseStart { exercise_id: usize },
     /// Stop the current exercise evaluation in progress
     ExerciseEnd,
     /// Close all connections
@@ -35,34 +33,33 @@ pub enum Requests {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 struct JsonKeypoint {
-    x: f32, y: f32
+    x: f32,
+    y: f32,
 }
 
 impl From<Keypoint> for JsonKeypoint {
     fn from(item: Keypoint) -> Self {
-        Self { 
-            x: item.x, 
-            y: item.y 
+        Self {
+            x: item.x,
+            y: item.y,
         }
     }
 }
 
 #[derive(Debug, Serialize)]
 struct JsonPoseData {
-    keypoints: [JsonKeypoint; 20]
+    keypoints: [JsonKeypoint; 20],
 }
 
 impl From<PoseData> for JsonPoseData {
     fn from(item: PoseData) -> Self {
-        let mut keypoints: [JsonKeypoint; 20] = [JsonKeypoint{x:0.0,y:0.0}; 20];
+        let mut keypoints: [JsonKeypoint; 20] = [JsonKeypoint { x: 0.0, y: 0.0 }; 20];
         for i in 0..item.kps.len() {
             keypoints[i].x = item.kps[i].x;
             keypoints[i].y = item.kps[i].y;
         }
 
-        Self {
-            keypoints
-        }
+        Self { keypoints }
     }
 }
 
@@ -77,7 +74,7 @@ pub enum Responses {
     SessionEnd,
     ExerciseStart,
     ExerciseUpdate {
-        pose: JsonPoseData
+        pose: JsonPoseData,
     },
     ExerciseEnd,
     CloseAll,
@@ -88,7 +85,10 @@ async fn send_response(ws_stream: &mut WebSocketStream<TcpStream>, response: Res
     ws_stream.send(json.into()).await.unwrap();
 }
 
-async fn handle_message(ws_stream: &mut WebSocketStream<TcpStream>, msg: Message) -> Option<Requests> {
+async fn handle_message(
+    ws_stream: &mut WebSocketStream<TcpStream>,
+    msg: Message,
+) -> Option<Requests> {
     if msg.is_text() {
         // Try to deserialize command received
         if let Ok(json) = msg.into_text() {
@@ -107,6 +107,7 @@ async fn handle_message(ws_stream: &mut WebSocketStream<TcpStream>, msg: Message
 }
 
 /// Handles a single connection, sends messages to controller and sends data to client
+#[tracing::instrument]
 async fn run_connection(
     kill_tx: broadcast::Sender<()>,
     peer: SocketAddr,
@@ -114,10 +115,11 @@ async fn run_connection(
     session: SessionProxy,
     pose: PoseProxy,
 ) {
-    let mut ws_stream = accept_async(stream).await
+    let mut ws_stream = accept_async(stream)
+        .await
         .expect("unable to accept WebSocket connection");
 
-    println!("Connection - accepted");
+    tracing::info!("connection accepted");
 
     // Create receiver for kill signal
     let mut kill_rx = kill_tx.subscribe();
@@ -125,7 +127,7 @@ async fn run_connection(
     // Request a data channel connection
     let mut data_receiver = session.connect_output_stream().await;
 
-    // Process all events 
+    // Process all events
     loop {
         tokio::select! {
 
@@ -135,24 +137,29 @@ async fn run_connection(
                 if let Some(request) = handle_message(&mut ws_stream, msg.unwrap()).await {
                     match request {
                         Requests::SessionStart => {
+                            tracing::info!("request: session start");
                             session.session_start().await;
                             send_response(&mut ws_stream, Responses::SessionConnect {
                                 already_in_progress: false, // NOTE: just for testing...
                             }).await;
                         }
                         Requests::SessionEnd => {
+                            tracing::info!("request: session end");
                             session.session_end().await;
                             send_response(&mut ws_stream, Responses::SessionEnd).await;
                         },
                         Requests::ExerciseStart { exercise_id } => {
+                            tracing::info!("request: exercise start");
                             session.exercise_start(exercise_id).await;
                             send_response(&mut ws_stream, Responses::ExerciseStart).await;
                         },
                         Requests::ExerciseEnd => {
+                            tracing::info!("request: exercise end");
                             session.exercise_end().await;
                             send_response(&mut ws_stream, Responses::ExerciseEnd).await;
                         },
                         Requests::CloseAll => {
+                            tracing::info!("request: close all connections");
                             kill_tx.send(()).unwrap();
                             send_response(&mut ws_stream, Responses::CloseAll).await;
                         }
@@ -163,6 +170,7 @@ async fn run_connection(
             // Handle direct output data stream from the rest of the engine
             engine_data = data_receiver.recv() => {
                 if let Ok(pose) = engine_data {
+                    tracing::trace!("forward data");
                     send_response(&mut ws_stream, Responses::ExerciseUpdate {
                         pose: pose.into()
                     }).await;
@@ -170,8 +178,8 @@ async fn run_connection(
             }
 
             // TODO: Handle commands from the global connection controller
-            kill_signal = kill_rx.recv() => {
-                println!("Connection - closed");
+            _ = kill_rx.recv() => {
+                tracing::info!("connection closed");
                 return;
             }
         }
@@ -179,6 +187,7 @@ async fn run_connection(
 }
 
 /// Accepts incomming connections and spawns handlers.
+#[tracing::instrument]
 pub async fn run_websocket_server(
     addr: &str,
     session_proxy: &SessionProxy,
@@ -190,9 +199,10 @@ pub async fn run_websocket_server(
     let (kill_tx, kill_rx) = broadcast::channel(100);
     drop(kill_rx);
 
-    println!("WebSocket - waiting connection");
+    tracing::info!("waiting connection");
     while let Ok((stream, _)) = listener.accept().await {
         let peer = stream.peer_addr()?;
+        tracing::info!("spawn connecion handler");
         tokio::spawn(run_connection(
             kill_tx.clone(),
             peer,

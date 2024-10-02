@@ -1,35 +1,34 @@
-use tokio::sync::{mpsc, oneshot, broadcast};
+use tokio::sync::{broadcast, mpsc, oneshot};
 
-use crate::pose::{PoseProxy, PoseEventSender, PoseEventSink};
+use crate::pose::{PoseEventSender, PoseEventSink, PoseProxy};
 use prepose::PoseData;
 
 enum Command {
-
     /// Signal to the session controller that we are interested in receiving data
-    ConnectToDataStream { 
-        respond_to: oneshot::Sender<broadcast::Receiver<PoseData>>
+    ConnectToDataStream {
+        respond_to: oneshot::Sender<broadcast::Receiver<PoseData>>,
     },
 
     SessionStart,
     SessionEnd,
-    ExerciseStart { 
+    ExerciseStart {
         exercise_id: usize,
     },
-    ExerciseEnd
+    ExerciseEnd,
 }
 
 #[derive(PartialEq)]
 enum SessionState {
-    Idle, 
+    Idle,
     SessionIdle,
-    ExerciseRunning 
+    ExerciseRunning,
 }
 
 struct Session {
     receiver: mpsc::Receiver<Command>,
     data_sender: broadcast::Sender<PoseData>,
     state: SessionState,
-    
+
     in_progress: bool,
     pose_receiver: mpsc::Receiver<PoseData>,
     pose: PoseProxy,
@@ -38,13 +37,15 @@ struct Session {
     current_exercise_data: Vec<PoseData>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SessionProxy(mpsc::Sender<Command>);
 impl SessionProxy {
-
     pub async fn connect_output_stream(&self) -> broadcast::Receiver<PoseData> {
         let (tx, rx) = oneshot::channel();
-        self.0.send(Command::ConnectToDataStream { respond_to: tx }).await.unwrap();
+        self.0
+            .send(Command::ConnectToDataStream { respond_to: tx })
+            .await
+            .unwrap();
         rx.await.unwrap()
     }
 
@@ -55,9 +56,10 @@ impl SessionProxy {
         self.0.send(Command::SessionEnd).await.unwrap();
     }
     pub async fn exercise_start(&self, exercise_id: usize) {
-        self.0.send(Command::ExerciseStart {
-            exercise_id
-        }).await.unwrap();
+        self.0
+            .send(Command::ExerciseStart { exercise_id })
+            .await
+            .unwrap();
     }
     pub async fn exercise_end(&self) {
         self.0.send(Command::ExerciseEnd).await.unwrap();
@@ -65,8 +67,10 @@ impl SessionProxy {
 }
 
 impl Session {
-    fn instantiate(pose: &PoseProxy, pose_receiver: mpsc::Receiver<PoseData>) -> (Self, SessionProxy) {
-
+    fn instantiate(
+        pose: &PoseProxy,
+        pose_receiver: mpsc::Receiver<PoseData>,
+    ) -> (Self, SessionProxy) {
         // Broadcast channel used to send analyzed data
         let (final_sender, final_receiver) = broadcast::channel(100);
         drop(final_receiver);
@@ -90,7 +94,6 @@ impl Session {
 
     async fn handle_command(&mut self, cmd: Command) {
         match cmd {
-
             Command::ConnectToDataStream { respond_to } => {
                 let data_receiver = self.data_sender.subscribe();
                 respond_to.send(data_receiver).unwrap();
@@ -101,12 +104,12 @@ impl Session {
                     println!("Session: invalid state for session start");
                     return;
                 }
-                
+
                 // TODO: load exercises collection
 
                 self.state = SessionState::SessionIdle;
                 println!("Session: session start");
-            },
+            }
             Command::ExerciseStart { exercise_id } => {
                 if self.state != SessionState::SessionIdle {
                     println!("Session: invalid state for exercise start");
@@ -118,7 +121,7 @@ impl Session {
 
                 self.state = SessionState::ExerciseRunning;
                 println!("Session: exercise start ({})", exercise_id);
-            },
+            }
             Command::ExerciseEnd => {
                 if self.state != SessionState::ExerciseRunning {
                     println!("Session: invalid state for exercise end");
@@ -140,8 +143,8 @@ impl Session {
 
                 println!("Session: session end");
                 self.state = SessionState::Idle;
-            },
-            _ => todo!()
+            }
+            _ => todo!(),
         }
     }
 
@@ -165,7 +168,7 @@ impl Session {
                         self.current_exercise_data.push(pose.clone());
 
                         // TODO: run motion analyzer
-                        
+
 
                         // Broadcast pose to connections
                         self.data_sender.send(pose).unwrap();

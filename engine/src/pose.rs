@@ -16,13 +16,12 @@ pub enum Command {
     InferenceStop,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PoseProxy {
-    commands: mpsc::Sender<Command>
+    commands: mpsc::Sender<Command>,
 }
 
 impl PoseProxy {
-
     pub async fn inference_start(&self) {
         self.commands.send(Command::InferenceStart).await.unwrap();
     }
@@ -33,6 +32,7 @@ impl PoseProxy {
 }
 
 /// Pose estimator and analyzer
+#[derive(Debug)]
 struct Pose {
     cmd_receiver: mpsc::Receiver<Command>,
     data_sender: mpsc::Sender<PoseData>,
@@ -42,7 +42,6 @@ struct Pose {
 
 impl Pose {
     pub fn instantiate() -> (Self, PoseProxy, mpsc::Receiver<PoseData>) {
-
         // Channel for commands
         let (cmd_sender, cmd_receiver) = mpsc::channel(100);
 
@@ -51,22 +50,22 @@ impl Pose {
 
         // Connect to prepose library
         let engine = PoseEstimator::new(
-            "network/pose_resnet18_body.onnx", 
-            "network/human_pose.json", 
-            "network/colors.txt"
+            "network/pose_resnet18_body.onnx",
+            "network/human_pose.json",
+            "network/colors.txt",
         );
-        
+
         (
             Pose {
                 cmd_receiver,
                 data_sender,
                 engine,
-                is_running: false
+                is_running: false,
             },
             PoseProxy {
                 commands: cmd_sender,
             },
-            data_receiver
+            data_receiver,
         )
     }
 
@@ -74,12 +73,14 @@ impl Pose {
         match msg {
             Command::InferenceStart => {
                 if !self.is_running {
+                    tracing::trace!("inference start");
                     self.engine.inference_start("/dev/video0");
                     self.is_running = true;
                 }
             }
             Command::InferenceStop => {
                 if self.is_running {
+                    tracing::trace!("inference stop");
                     self.engine.inference_end();
                     self.is_running = false;
                 }
@@ -87,14 +88,14 @@ impl Pose {
         }
     }
 
+    #[tracing::instrument]
     pub async fn run(mut self) {
         tokio::task::block_in_place(move || {
             loop {
                 if self.is_running {
-                    
                     // Generate a pose estimation and output to channel
                     let pose = self.engine.inference_step();
-                    if let Some(pose) = pose {                            
+                    if let Some(pose) = pose {
                         self.data_sender.blocking_send(pose).unwrap();
                     }
 
@@ -102,17 +103,13 @@ impl Pose {
                     if let Ok(msg) = self.cmd_receiver.try_recv() {
                         self.handle_message(msg);
                     }
-
-                    // How mutch to wait between frames
-                    //std::thread::sleep(std::time::Duration::from_millis(10));
-
                 } else {
                     if let Some(msg) = self.cmd_receiver.blocking_recv() {
                         println!("pose - received message");
                         self.handle_message(msg);
                     }
                 }
-            }        
+            }
         })
     }
 }

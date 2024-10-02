@@ -1,11 +1,11 @@
-use std::os::raw::{c_char, c_int};
 use std::ffi::CString;
+use std::os::raw::{c_char, c_int};
 
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct Keypoint {
     pub x: f32,
-    pub y: f32
+    pub y: f32,
 }
 
 #[repr(C)]
@@ -13,14 +13,14 @@ struct LibPoseData {
     detected_subjects: c_int,
     detected_kps: c_int,
     kps: [Keypoint; 20],
-    error: c_int
+    error: c_int,
 }
 
 #[derive(Debug, Clone)]
 pub struct PoseData {
     pub subjects: usize,
     pub valid_kps: usize,
-    pub kps: [Keypoint; 20] 
+    pub kps: [Keypoint; 20],
 }
 
 impl From<LibPoseData> for Option<PoseData> {
@@ -50,27 +50,22 @@ extern "C" {
     fn shutdown();
 }
 
+#[derive(Debug)]
 pub struct PoseEstimator;
 impl PoseEstimator {
     pub fn new(network: &str, pose: &str, colors: &str) -> Self {
         let network = CString::new(network).unwrap();
         let pose = CString::new(pose).unwrap();
         let colors = CString::new(colors).unwrap();
-        unsafe {        
-            initialize(
-                network.as_ptr(), 
-                pose.as_ptr(), 
-                colors.as_ptr()
-            ); 
+        unsafe {
+            initialize(network.as_ptr(), pose.as_ptr(), colors.as_ptr());
         }
         Self
     }
 
     pub fn inference_start(&mut self, video: &str) {
         let video = CString::new(video).unwrap();
-        unsafe { 
-            inference_start(video.as_ptr()) 
-        }
+        unsafe { inference_start(video.as_ptr()) }
     }
 
     pub fn inference_step(&mut self) -> Option<PoseData> {
@@ -81,9 +76,7 @@ impl PoseEstimator {
     }
 
     pub fn inference_end(&mut self) {
-        unsafe {
-            inference_end()
-        }
+        unsafe { inference_end() }
     }
 }
 
@@ -102,11 +95,11 @@ mod tests {
     #[test]
     fn end_to_end() {
         let mut pose = PoseEstimator::new(
-            "../network/pose_resnet18_body.onnx", 
-            "../network/human_pose.json", 
-            "../network/colors.txt"
+            "../network/pose_resnet18_body.onnx",
+            "../network/human_pose.json",
+            "../network/colors.txt",
         );
-    
+
         // Ex1
         pose.inference_start("/dev/video0");
         for _ in 0..10 {
@@ -114,7 +107,7 @@ mod tests {
             println!("{:?}", pose);
         }
         pose.inference_end();
-    
+
         // Ex2
         pose.inference_start("/dev/video0");
         for _ in 0..10 {
@@ -124,3 +117,4 @@ mod tests {
         pose.inference_end();
     }
 }
+
