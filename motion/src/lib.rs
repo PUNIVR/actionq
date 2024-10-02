@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     fs,
     ops::{Range, RangeBounds},
 };
@@ -20,11 +20,11 @@ pub type CFId = String;
 
 /// Interesting characteristics of the pose
 pub type ControlFactor = f32;
-pub type ControlFactorMap = HashMap<CFId, ControlFactor>;
+pub type ControlFactorMap = BTreeMap<CFId, ControlFactor>;
 
 /// All possible conditions
 #[derive(Clone, Debug, Serialize, Deserialize)]
-enum Condition {
+pub enum Condition {
     /// Check if CF is in range
     InRange { range: Range<f32> },
     /// Check if CF is not in range
@@ -38,8 +38,8 @@ enum Condition {
 /// Condition associated with a control factor
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MappedCondition {
-    control_factor: CFId,
-    condition: Condition,
+    pub control_factor: CFId,
+    pub condition: Condition,
 }
 
 impl MappedCondition {
@@ -60,9 +60,9 @@ impl MappedCondition {
 /// Used to inform the patient of non-optimal joint pose
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Warning {
-    name: String,
-    description: String,
-    condition: MappedCondition,
+    pub name: String,
+    pub description: String,
+    pub condition: MappedCondition,
 }
 
 impl Warning {
@@ -172,7 +172,7 @@ where
             .collect();
     }
 
-    pub fn progress<G>(&mut self, deltatime: f32, input: G) -> ProgresState
+    pub fn progress<G>(&mut self, deltatime: f32, input: &G) -> ProgresState
     where
         G: GenControlFactors,
     {
@@ -379,7 +379,7 @@ mod tests {
     type TestPoseData = f32;
     impl GenControlFactors for TestPoseData {
         fn control_factors(&self) -> ControlFactorMap {
-            HashMap::from([("feet_distance".into(), *self)])
+            BTreeMap::from([("feet_distance".into(), *self)])
         }
     }
 

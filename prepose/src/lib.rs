@@ -1,18 +1,20 @@
 use std::os::raw::{c_char, c_int};
 use std::ffi::CString;
 
+use glam::Vec2;
+
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct Keypoint {
-    pub x: f32,
-    pub y: f32
+pub struct LibKeypoint {
+    x: f32,
+    y: f32
 }
 
 #[repr(C)]
 struct LibPoseData {
     detected_subjects: c_int,
     detected_kps: c_int,
-    kps: [Keypoint; 20],
+    kps: [LibKeypoint; 18],
     error: c_int
 }
 
@@ -20,19 +22,62 @@ struct LibPoseData {
 pub struct PoseData {
     pub subjects: usize,
     pub valid_kps: usize,
-    pub kps: [Keypoint; 20] 
+    pub kps: Vec<Vec2>
+}
+
+impl From<LibKeypoint> for Vec2 {
+    fn from(item: LibKeypoint) -> Vec2 {
+        Vec2::new(
+            item.x, 
+            item.y
+        )
+    }
 }
 
 impl From<LibPoseData> for Option<PoseData> {
     fn from(item: LibPoseData) -> Self {
+
         if item.error == 0 {
             return Some(PoseData {
                 subjects: item.detected_subjects as usize,
                 valid_kps: item.detected_kps as usize,
-                kps: item.kps,
+                kps: item.kps.iter()
+                    .map(|k| k.clone().into())
+                    .collect(),
             });
         }
         None
+    }
+}
+
+
+impl PoseData {
+    pub fn keypoint_from_name<S: AsRef<str>>(&self, name: S) -> Option<&Vec2> {
+
+        // From the COCO skeleton
+        let id = match name.as_ref() {
+            "nose" =>              0, 
+            "left_eye" =>          1, 
+            "right_eye" =>         2, 
+            "left_ear" =>          3, 
+            "right_ear" =>         4, 
+            "left_shoulder" =>     5, 
+            "right_shoulder" =>    6, 
+            "left_elbow" =>        7, 
+            "right_elbow" =>       8, 
+            "left_wrist" =>        9, 
+            "right_wrist" =>      10, 
+            "left_hip" =>         11, 
+            "right_hip" =>        12, 
+            "left_knee" =>        13, 
+            "right_knee" =>       14, 
+            "left_ankle" =>       15, 
+            "right_ankle" =>      16, 
+            "neck" =>             17,
+            _ => return None            
+        };
+
+        Some(&self.kps[id])
     }
 }
 
@@ -52,10 +97,12 @@ extern "C" {
 
 pub struct PoseEstimator;
 impl PoseEstimator {
+
     pub fn new(network: &str, pose: &str, colors: &str) -> Self {
         let network = CString::new(network).unwrap();
         let pose = CString::new(pose).unwrap();
         let colors = CString::new(colors).unwrap();
+        
         unsafe {        
             initialize(
                 network.as_ptr(), 

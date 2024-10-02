@@ -26,7 +26,7 @@ struct keypoint {
 struct pose_data {
     int detected_subjects;
     int detected_kps;
-    keypoint kps[20];
+    keypoint kps[18];
     int error;
 };
 
