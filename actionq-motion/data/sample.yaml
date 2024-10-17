@@ -1,0 +1,48 @@
+# Name of the exercise, used in the database
+name: sample
+
+# What joints are required
+required_joints:
+  - foot_left
+  - foot_right
+
+# What control factors are required
+required_control_factors:
+  - feet_distance_x
+  - angle_column_femor
+
+# The states that compose the FSM
+states:
+  - idle
+  - big_distance
+  - small_distance
+
+# Global warning that are always checked
+global_warnings:
+  - name: incorrect_posture_general
+    description: blablabla
+    conditions:
+      - type: not_in_range
+        cf: angle_column_femor
+        range: (30.0, 70.0)
+
+architecture:
+  # The current state
+  small_distance:
+    # Warnings that are generated during this state
+    # usefull to inform the user about errors
+    warnings:
+      - name: incorrect_posture_small
+        type: not_in_range
+        range: (30.0, 70.0)
+        cf: angle_column_femor
+    transitions:
+      - to: big_distance
+        duration: 10.0 #ms
+        conditions:
+          - type: greater_than
+            cf: feet_distance_x
+            value: 100.0
+        emit:
+          - repetition_completed
+

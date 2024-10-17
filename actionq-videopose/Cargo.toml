@@ -1,0 +1,15 @@
+[package]
+name = "videopose"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = { version = "0.29.1", features = [ "default" ] }
+egui_extras = { version = "0.29.1", features = [ "default", "image" ] }
+egui = "0.29.1"
+tracing-subscriber = { version = "0.3", features = [ "env-filter" ] }
+tracing = "0.1.40"
+glam = "0.29.0"
+
+[build-dependencies]
+cc = "1.0"
