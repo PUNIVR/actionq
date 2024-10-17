@@ -6,7 +6,8 @@ use glam::Vec2;
 use std::ops::Deref;
 
 use crate::pose::{PoseEventSender, PoseEventSink, PoseProxy};
-use videopose::FrameData;
+use crate::ui::UiProxy;
+use videopose::{FrameData, Framebuffer};
 use motion::{
     MotionAnalyzer, 
     Exercise, 
@@ -231,6 +232,7 @@ struct Session {
     in_progress: bool,
     pose_receiver: mpsc::Receiver<FrameData>,
     pose: PoseProxy,
+    ui: UiProxy,
 
     /// Store the current exercise data
     current_exercise_data: Vec<SessionPoseData>,
@@ -271,14 +273,15 @@ impl Session {
     fn instantiate(
         pose: &PoseProxy,
         pose_receiver: mpsc::Receiver<FrameData>,
+        ui: UiProxy
     ) -> (Self, SessionProxy) {
+
         // Broadcast channel used to send analyzed data
         let (final_sender, final_receiver) = broadcast::channel(100);
         drop(final_receiver);
 
         // Channel used to comunicate with actor
         let (tx, rx) = mpsc::channel(100);
-
         (
             Self {
                 receiver: rx,
@@ -289,6 +292,7 @@ impl Session {
                 analyzer: None,
                 in_progress: false,
                 pose: pose.clone(),
+                ui: ui
             },
             SessionProxy(tx),
         )
@@ -324,6 +328,9 @@ impl Session {
                 self.analyzer = Some(MotionAnalyzer::new(JsonExercise::simple()));
                 self.pose.inference_start().await;
 
+                // Start visualization
+                self.ui.exercise_show(exercise_id).await;
+
                 self.state = SessionState::ExerciseRunning;
                 tracing::info!("exercise started ({})", exercise_id);
             }
@@ -333,7 +340,11 @@ impl Session {
                     return;
                 }
 
+                // Stop pose estimator
                 self.pose.inference_end().await;
+
+                // Stop visualization
+                self.ui.exercise_stop().await;
 
                 self.state = SessionState::SessionIdle;
                 tracing::info!("exercise ended");
@@ -368,9 +379,16 @@ impl Session {
                 // Handle data from pose estimator
                 pose_data = self.pose_receiver.recv() => {
                     if let Some(pose_prepose) = pose_data {
-                        let pose = SessionPoseData(pose_prepose);
+                        tracing::trace!("receive pose data and framebuffer");
 
+                        // Send framebuffer to ui first
+                        // FIXME: remove unnecessary clone, after this we only need the skeleton, not the framebuffer
+                        let framebuffer = &pose_prepose.framebuffer;
+                        self.ui.display_frame(framebuffer.storage.clone(), framebuffer.size.0 as usize, framebuffer.size.1 as usize).await;
+                        let _ = framebuffer;
+                        
                         // Analyze only if there is a subject
+                        let pose = SessionPoseData(pose_prepose);
                         if pose.subjects != 0 {
 
                             // Save pose for later storage
@@ -400,8 +418,8 @@ impl Session {
     }
 }
 
-pub fn run_session(pose: &PoseProxy, pose_receiver: mpsc::Receiver<FrameData>) -> SessionProxy {
-    let (session, proxy) = Session::instantiate(pose, pose_receiver);
+pub fn run_session(pose: &PoseProxy, pose_receiver: mpsc::Receiver<FrameData>, ui: UiProxy) -> SessionProxy {
+    let (session, proxy) = Session::instantiate(pose, pose_receiver, ui);
     tokio::spawn(session.run_session());
     proxy
 }

@@ -24,6 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Channel for UI messages
     let (ui_tx, ui_rx) = tokio::sync::mpsc::channel(100);
+    let ui_proxy = ui::UiProxy(ui_tx);
 
     // Move the tokio runtime to a different thread
     std::thread::spawn(move || {
@@ -31,13 +32,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let rt_enter = rt.enter();
         rt.block_on(async {
 
-            let ui_proxy = ui::UiProxy(ui_tx);
-
             // For testing start an exercise view
-            ui_proxy.exercise_show("001".into()).await;
+            //ui_proxy.exercise_show("001".into()).await;
 
             let (pose, pose_receiver) = pose::run_human_pose_estimator();
-            let session = session::run_session(&pose, pose_receiver);
+            let session = session::run_session(&pose, pose_receiver, ui_proxy);
             let server = network::run_websocket_server("0.0.0.0:3666", &session, &pose)
                 .await.expect("Server - error");
         });

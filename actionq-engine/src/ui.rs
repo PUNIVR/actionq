@@ -8,19 +8,30 @@ use videopose::FrameData;
 #[derive(Debug)]
 pub enum Command {
     ExerciseStart {
-        exercise_id: String,
+        exercise_id: usize,
     },
     DisplayFrame {
-        frame: FrameData,
+        frame: Vec<u8>,
+        w: usize,
+        h: usize
     },
     ExerciseEnd
 }
 
+#[derive(Debug)]
 pub struct UiProxy(pub Sender<Command>);
 impl UiProxy {
     // Show exercise on UI
-    pub async fn exercise_show(&self, exercise_id: String) {
+    pub async fn exercise_show(&self, exercise_id: usize) {
         self.0.send(Command::ExerciseStart { exercise_id } ).await.unwrap();
+    }
+    // Display framedata
+    pub async fn display_frame(&self, frame: Vec<u8>, w: usize, h: usize) {
+        self.0.send(Command::DisplayFrame{ frame, w, h }).await.unwrap();
+    }
+    // Stop showing exercise
+    pub async fn exercise_stop(&self) {
+        self.0.send(Command::ExerciseEnd).await.unwrap();
     }
 }
 
@@ -69,7 +80,7 @@ struct MyUi {
     repetition_count: u32,
 
     exercise_gif: Option<ExerciseGif>,
-    current_frame: Option<FrameData>,
+    current_frame: Option<egui::ColorImage>,
 
     // Receive all cmd messages
     cmds: Receiver<Command>
@@ -80,26 +91,6 @@ impl MyUi {
         let _ = egui::TopBottomPanel::top("header").show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.heading("ActionQ");
-
-                let start_btn = match self.is_running {
-                    true => ui.add_enabled(false, Button::new("START")),
-                    false => ui.button("START")
-                };
-
-                let stop_btn = match self.is_running {
-                    true => ui.button("STOP"),
-                    false => ui.add_enabled(false, Button::new("STOP")),
-                };
-
-                if self.is_running {
-                    if stop_btn.clicked() {
-                        self.is_running = false;
-                    }
-                } else {
-                    if start_btn.clicked() {
-                        self.is_running = true;
-                    }
-                }
             });
         });
     }
@@ -111,11 +102,17 @@ impl MyUi {
             ui.heading("Viewport");
             ui.add_space(25.0);
 
-            //if let Some(frame) = self.current_frame {
-            //    let texture: egui::TextureHandle = ui.ctx().load_texture("stream-tex", frame, Default::default());
-            //    ui.image((texture.id(), texture.size_vec2()));
-            //    ui.add_space(5.0);
-            //}
+            // Show video stream if available
+            if let Some(frame) = &self.current_frame {
+                let texture: egui::TextureHandle = ui.ctx().load_texture("stream-tex", frame.clone(), Default::default());
+                ui.add(
+                    egui::Image::from_texture(&texture)
+                        .maintain_aspect_ratio(true)
+                        .fit_to_fraction([0.9, 0.9].into())
+                        .rounding(10.0)
+                );
+                ui.add_space(5.0);
+            }
         });
     }
     
@@ -130,12 +127,14 @@ impl MyUi {
             if let Some(ref mut exercise_gif) = self.exercise_gif {
                 let frame = exercise_gif.update_current_frame(Duration::from_millis(50 /* 20 FPS */));
                 let texture: egui::TextureHandle = ui.ctx().load_texture("reference-tex", frame, Default::default());
-                ui.image((texture.id(), texture.size_vec2()));
+                ui.add(
+                    egui::Image::from_texture(&texture)
+                        .maintain_aspect_ratio(true)
+                        .fit_to_fraction([0.9, 0.9].into())
+                        .rounding(10.0)
+                );
                 ui.add_space(5.0);
             }
-
-            // Request update of the ui
-            ui.ctx().request_repaint();
         });
     }
     
@@ -149,13 +148,14 @@ impl MyUi {
 }
 
 impl App for MyUi {
+    #[tracing::instrument(skip_all, fields(cmd))]
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
 
         // Get new messages if available
         if let Ok(cmd) = self.cmds.try_recv() {
             match cmd {
                 Command::ExerciseStart { ref exercise_id } => {
-                    println!("{:?}", &cmd);
+                    tracing::trace!("start exercise display");
                     
                     // Load the gif
                     let exercise_data = std::fs::read(&format!("/home/nvidia/Repositories/actionq-core/exercises/{}/reference.webp", exercise_id)).unwrap();
@@ -173,10 +173,16 @@ impl App for MyUi {
                         last_time: Instant::now()
                     });
                 },
-                Command::DisplayFrame { frame } => {
+
+                // Convert frame to correct type
+                Command::DisplayFrame { frame, w, h } => {
+                    tracing::trace!("display single frame");
+                    let frame = egui::ColorImage::from_rgb([w, h], &frame);
                     self.current_frame = Some(frame);
                 },
                 Command::ExerciseEnd => {
+                    tracing::trace!("stop exercise display");
+
                     self.is_running = false;
                     self.exercise_gif = None;
                     self.current_frame = None;
@@ -189,6 +195,9 @@ impl App for MyUi {
         if self.is_running {
             self.render_viewports(ctx);
         }
+
+        // Request update of the ui, we always want this
+        ctx.request_repaint();
     }
 }
 
@@ -196,7 +205,6 @@ fn eframe_options() -> NativeOptions {
     // TODO: add more options
     NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            //.with_max_inner_size([1280.0, 720.0]),
             .with_fullscreen(true),
         ..Default::default()
     }

@@ -173,10 +173,11 @@ async fn run_connection(
             // Handle direct output data stream from the rest of the engine
             engine_data = data_receiver.recv() => {
                 if let Ok(pose) = engine_data {
-                    tracing::trace!("forward data");
-                    send_response(&mut ws_stream, Responses::ExerciseUpdate {
-                        pose: pose.into()
-                    }).await;
+                    // TODO: disabled for now, decide what to do here...
+                    //tracing::trace!("forward data");
+                    //send_response(&mut ws_stream, Responses::ExerciseUpdate {
+                    //    pose: pose.into()
+                    //}).await;
                 }
             }
 
