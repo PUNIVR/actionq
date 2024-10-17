@@ -4,9 +4,9 @@ use tracing_subscriber::EnvFilter;
 mod network;
 mod pose;
 mod session;
+mod ui;
 
 fn setup_tracing() {
-
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::TRACE)  // enable everything
         .with_env_filter(EnvFilter::from_default_env())
@@ -18,16 +18,31 @@ fn setup_tracing() {
         .init();                                // sets this to be the default, global collector for this application.
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     setup_tracing();
 
-    let (pose, pose_receiver) = pose::run_human_pose_estimator();
-    let session = session::run_session(&pose, pose_receiver);
-    network::run_websocket_server("0.0.0.0:3666", &session, &pose)
-        .await
-        .expect("Server - error");
+    // Channel for UI messages
+    let (ui_tx, ui_rx) = tokio::sync::mpsc::channel(100);
 
+    // Move the tokio runtime to a different thread
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
+        let rt_enter = rt.enter();
+        rt.block_on(async {
+
+            let ui_proxy = ui::UiProxy(ui_tx);
+
+            // For testing start an exercise view
+            ui_proxy.exercise_show("001".into()).await;
+
+            let (pose, pose_receiver) = pose::run_human_pose_estimator();
+            let session = session::run_session(&pose, pose_receiver);
+            let server = network::run_websocket_server("0.0.0.0:3666", &session, &pose)
+                .await.expect("Server - error");
+        });
+    });
+
+    ui::run_ui_blocking(ui_rx);
     Ok(())
 }
