@@ -10,6 +10,7 @@ tokio-tungstenite = "0.23.1"
 tungstenite = "0.23.0"
 futures-util = { version = "0.3", default-features = false, features = ["async-await", "sink", "std"] }
 tracing = "0.1"
+firestore = "0.43.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 serde = { version = "1.0.209", features = ["derive"] }
 serde_json = "1.0.128"

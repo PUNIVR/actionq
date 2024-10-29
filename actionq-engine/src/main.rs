@@ -1,10 +1,12 @@
 use tokio;
 use tracing_subscriber::EnvFilter;
+use std::io::Read;
 
 mod network;
 mod pose;
 mod session;
 mod ui;
+mod firebase;
 
 fn setup_tracing() {
     tracing_subscriber::fmt()
@@ -32,11 +34,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let rt_enter = rt.enter();
         rt.block_on(async {
 
-            // For testing start an exercise view
-            //ui_proxy.exercise_show("001".into()).await;
-
             let (pose, pose_receiver) = pose::run_human_pose_estimator();
             let session = session::run_session(&pose, pose_receiver, ui_proxy);
+            let firestore_exit = firebase::run_event_listener("5Y7GXWsn2eJKn7tq6l7I", "uvc-unisco", &session);
             let server = network::run_websocket_server("0.0.0.0:3666", &session, &pose)
                 .await.expect("Server - error");
         });

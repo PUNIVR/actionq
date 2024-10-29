@@ -21,7 +21,7 @@ use motion::{
     Event
 };
 
-enum Command {
+pub enum Command {
     /// Signal to the session controller that we are interested in receiving data
     ConnectToDataStream { 
         respond_to: oneshot::Sender<broadcast::Receiver<SessionPoseData>>
@@ -266,6 +266,10 @@ impl SessionProxy {
     }
     pub async fn exercise_end(&self) {
         self.0.send(Command::ExerciseEnd).await.unwrap();
+    }
+
+    pub async fn send(&self, cmd: Command) {
+        self.0.send(cmd).await.unwrap();
     }
 }
 

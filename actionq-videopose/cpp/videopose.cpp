@@ -62,7 +62,7 @@ extern "C" {
 API int initialize(const char* network_path, const char* pose_path, const char* colors_path) {
 
     // TODO: find a way to handel this logger better
-    Log::SetLevel(Log::Level::DEBUG);
+    Log::SetLevel(Log::Level::WARNING);
 
     // Initialize framebuffer to zeros
     memset(LAST_FB_DATA, 0, FB_BYTES);

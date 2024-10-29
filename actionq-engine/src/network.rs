@@ -15,7 +15,7 @@ use crate::{
 type ServerResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Possible requests from the client
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Requests {
     /// Starts a new session, if one is already in progress then connect to that
@@ -203,7 +203,6 @@ pub async fn run_websocket_server(
     let (kill_tx, kill_rx) = broadcast::channel(100);
     drop(kill_rx);
 
-    
     tracing::info!("waiting connection");
     let mut connection_id = 0;
     while let Ok((stream, _)) = listener.accept().await {
