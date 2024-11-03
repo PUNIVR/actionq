@@ -132,9 +132,9 @@ pub struct MotionAnalyzer<E> {
 
 #[derive(Debug)]
 pub struct ProgresState {
-    current_state: StateId,
-    warnings: Vec<Warning>,
-    events: Vec<Event>,
+    pub current_state: StateId,
+    pub warnings: Vec<Warning>,
+    pub events: Vec<Event>,
 }
 
 impl<E> MotionAnalyzer<E>

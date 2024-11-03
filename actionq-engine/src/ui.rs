@@ -3,17 +3,23 @@ use webp_animation::prelude::*;
 use eframe::{egui, App, NativeOptions};
 use egui::{Button, Rect, TextureOptions, Ui};
 use tokio::sync::mpsc::{Sender, Receiver};
-use videopose::FrameData;
+
+use videopose::Framebuffer;
+use motion::{
+    Warning, 
+    Event, 
+    ProgresState, 
+    StateId
+};
 
 #[derive(Debug)]
 pub enum Command {
     ExerciseStart {
         exercise_id: usize,
     },
-    DisplayFrame {
-        frame: Vec<u8>,
-        w: usize,
-        h: usize
+    Update {
+        progress: ProgresState,
+        frame: Framebuffer,
     },
     ExerciseEnd
 }
@@ -26,8 +32,8 @@ impl UiProxy {
         self.0.send(Command::ExerciseStart { exercise_id } ).await.unwrap();
     }
     // Display framedata
-    pub async fn display_frame(&self, frame: Vec<u8>, w: usize, h: usize) {
-        self.0.send(Command::DisplayFrame{ frame, w, h }).await.unwrap();
+    pub async fn update(&self, progress: ProgresState, frame: Framebuffer) {
+        self.0.send(Command::Update{ progress, frame }).await.unwrap();
     }
     // Stop showing exercise
     pub async fn exercise_stop(&self) {
@@ -104,6 +110,7 @@ impl MyUi {
 
             // Show video stream if available
             if let Some(frame) = &self.current_frame {
+                // FIXME: cache this texture, this allocates a new one at each render
                 let texture: egui::TextureHandle = ui.ctx().load_texture("stream-tex", frame.clone(), Default::default());
                 ui.add(
                     egui::Image::from_texture(&texture)
@@ -112,6 +119,10 @@ impl MyUi {
                         .rounding(10.0)
                 );
                 ui.add_space(5.0);
+
+                // Label for repetitions
+                ui.add_sized([400.0, 100.0], 
+                    egui::Label::new(&format!("RIPETIZIONI: {}", self.repetition_count)));
             }
         });
     }
@@ -167,18 +178,26 @@ impl App for MyUi {
                         }).collect();
 
                     self.is_running = true;
+                    self.repetition_count = 0;
                     self.exercise_gif = Some(ExerciseGif {
                         frames: exercise_frames,
                         current_exercise_frame: 0,
                         last_time: Instant::now()
                     });
                 },
-
-                // Convert frame to correct type
-                Command::DisplayFrame { frame, w, h } => {
+                Command::Update { progress, frame } => {
                     tracing::trace!("display single frame");
-                    let frame = egui::ColorImage::from_rgb([w, h], &frame);
+
+                    let frame = egui::ColorImage::from_rgb([frame.size.0 as usize, frame.size.1 as usize], &frame.storage);
                     self.current_frame = Some(frame);
+
+                    // Increase repetition count if necessary
+                    for event in &progress.events {
+                        match event {
+                            Event::RepetitionComplete => self.repetition_count += 1,
+                            _ => { }
+                        }
+                    }
                 },
                 Command::ExerciseEnd => {
                     tracing::trace!("stop exercise display");

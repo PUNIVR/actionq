@@ -107,6 +107,12 @@ pub struct FrameData {
     pub subjects: u32,
 }
 
+impl FrameData {
+    pub fn split(self) -> (Framebuffer, Vec<Vec2>, u32) {
+        (self.framebuffer, self.keypoints, self.subjects)
+    }
+}
+
 impl From<CppKeypoint> for Vec2 {
     fn from(item: CppKeypoint) -> Vec2 {
         Vec2::new(item.x, item.y)

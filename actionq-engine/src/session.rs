@@ -18,6 +18,7 @@ use motion::{
     ControlFactorMap, 
     MappedCondition, 
     Condition,
+    ProgresState,
     Event
 };
 
@@ -404,11 +405,12 @@ impl Session {
                             // TODO: use real deltatime
                             let deltatime = 0.1;
                             if let Some(analyzer) = &mut self.analyzer {
-                                // println!("{:?}", pose.control_factors());
                                 let progress = analyzer.progress(deltatime, &pose);
-                                println!("{:?}", progress);
+                                //println!("{:?}", progress);
 
-                                // TODO: Add progress state to display data
+                                // Send progress to UI
+                                // FIXME: remove clone
+                                self.ui.update(progress, pose.framebuffer.clone()).await;
 
                             } else {
                                 println!("warning: running exercise without an analyzer!")
@@ -417,11 +419,6 @@ impl Session {
                             // Broadcast pose to connections
                             // TODO: add analyzer output to broadcast
                             //self.data_sender.send(pose).unwrap();
-
-                            // Send framebuffer to ui first
-                            // FIXME: remove unnecessary clone, after this we only need the skeleton, not the framebuffer
-                            let framebuffer = &pose.0.framebuffer;
-                            self.ui.display_frame(framebuffer.storage.clone(), framebuffer.size.0 as usize, framebuffer.size.1 as usize).await;
 
                         } else {
                             println!("not subject in frame!");
