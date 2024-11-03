@@ -302,6 +302,11 @@ impl Session {
         )
     }
 
+    #[tracing::instrument(err)]
+    fn send_cec_signal(&self) -> std::io::Result<std::process::Output> {
+        std::process::Command::new("./turn_on.sh").output()
+    }
+
     #[tracing::instrument(skip_all, fields(cmd))]
     async fn handle_command(&mut self, cmd: Command) {
         match cmd {
@@ -315,6 +320,10 @@ impl Session {
                     tracing::warn!("invalid state for session start");
                     return;
                 }
+
+                // Send CEC command to turn on the TV
+                self.send_cec_signal()
+                    .expect("unable to turn on TV");
 
                 // TODO: load exercises collection
 
@@ -384,19 +393,13 @@ impl Session {
                 pose_data = self.pose_receiver.recv() => {
                     if let Some(pose_prepose) = pose_data {
                         tracing::trace!("receive pose data and framebuffer");
-
-                        // Send framebuffer to ui first
-                        // FIXME: remove unnecessary clone, after this we only need the skeleton, not the framebuffer
-                        let framebuffer = &pose_prepose.framebuffer;
-                        self.ui.display_frame(framebuffer.storage.clone(), framebuffer.size.0 as usize, framebuffer.size.1 as usize).await;
-                        let _ = framebuffer;
                         
                         // Analyze only if there is a subject
                         let pose = SessionPoseData(pose_prepose);
                         if pose.subjects != 0 {
 
                             // Save pose for later storage
-                            self.current_exercise_data.push(pose.clone());
+                            //self.current_exercise_data.push(pose.clone());
 
                             // TODO: use real deltatime
                             let deltatime = 0.1;
@@ -404,13 +407,21 @@ impl Session {
                                 // println!("{:?}", pose.control_factors());
                                 let progress = analyzer.progress(deltatime, &pose);
                                 println!("{:?}", progress);
+
+                                // TODO: Add progress state to display data
+
                             } else {
                                 println!("warning: running exercise without an analyzer!")
                             }
 
                             // Broadcast pose to connections
                             // TODO: add analyzer output to broadcast
-                            self.data_sender.send(pose).unwrap();
+                            //self.data_sender.send(pose).unwrap();
+
+                            // Send framebuffer to ui first
+                            // FIXME: remove unnecessary clone, after this we only need the skeleton, not the framebuffer
+                            let framebuffer = &pose.0.framebuffer;
+                            self.ui.display_frame(framebuffer.storage.clone(), framebuffer.size.0 as usize, framebuffer.size.1 as usize).await;
 
                         } else {
                             println!("not subject in frame!");

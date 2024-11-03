@@ -68,7 +68,7 @@ async fn listen_commands(patient_id: String, database_id: String, session: Sessi
 
     // Add commands document for the patient
     tracing::info!("reseting commands document for patient");
-    let doc = Document { doc_id: None, request: Requests::SessionStart };
+    let doc = Document { doc_id: None, request: Requests::SessionEnd };
     let doc_res: Document = db.fluent().update().in_col("commands")
         .document_id(&patient_id).object(&doc)
         .execute().await.expect("unable to add patient's command document");
