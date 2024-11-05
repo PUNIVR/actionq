@@ -377,7 +377,12 @@ impl Session {
                             if let Some(analyzer) = &mut self.analyzer {
                                 // println!("{:?}", pose.control_factors());
                                 let progress = analyzer.progress(deltatime, &pose);
-                                println!("{:?}", progress);
+				                tracing::trace!("{:?}", progress);
+
+                                // Send progress to UI
+                                // FIXME: remove clone
+                                self.ui.update(progress, pose.framebuffer.clone()).await;
+
                             } else {
                                 println!("warning: running exercise without an analyzer!")
                             }

@@ -85,8 +85,10 @@ pub struct Transition {
     pub emit: Vec<Event>,
 }
 
-pub struct TransitionState {
+#[derive(Debug)]
+pub struct TransitionProgress {
     pub transition: Transition,
+    pub threshold: f32,
     pub progress: f32,
 }
 
@@ -125,6 +127,7 @@ struct WarningProgress {
 pub struct MotionAnalyzer<E> {
     state_id: StateId,
     warnings_progress: Vec<WarningProgress>,
+    transition_progress: Vec<TransitionProgress>,
     exercise: E,
 }
 
@@ -146,28 +149,47 @@ where
             .into_iter()
             .map(|w| WarningProgress {
                 warning: w,
-                threshold: 100.0,
+                threshold: 1.0,
                 progress: 0.0,
+            })
+            .collect();
+
+        let transition_progress = exercise
+            .state_transitions(&initial_state)
+            .into_iter()
+            .map(|t| TransitionProgress {
+                transition: t,
+                threshold: 1.0,
+                progress: 0.0
             })
             .collect();
 
         Self {
             state_id: initial_state,
             warnings_progress,
+            transition_progress,
             exercise,
         }
     }
 
     fn change_current_state(&mut self, state: StateId) {
         self.state_id = state;
-        self.warnings_progress = self
-            .exercise
+        self.warnings_progress = self.exercise
             .state_warnings(&self.state_id)
             .into_iter()
             .map(|w| WarningProgress {
                 warning: w,
-                threshold: 100.0,
+                threshold: 1.0,
                 progress: 0.0,
+            })
+            .collect();
+        self.transition_progress = self.exercise
+            .state_transitions(&self.state_id)
+            .into_iter()
+            .map(|t| TransitionProgress {
+                transition: t,
+                threshold: 1.0,
+                progress: 0.0
             })
             .collect();
     }
@@ -177,27 +199,28 @@ where
         G: GenControlFactors,
     {
         let mut result_events: Vec<Event> = vec![];
+        let cfs = input.control_factors();
 
         // Get new data, create control factors, check all transition, add to duration if all
         // conditions are satisfied.
 
-        // Check all transitions
-        let cfs = input.control_factors();
-        let transitions_to_check = self.exercise.state_transitions(&self.state_id);
-        for trans in &transitions_to_check {
+        //let transitions_to_check = self.exercise.state_transitions(&self.state_id);
+        //for trans in &transitions_to_check {
             // Check all conditions for this transition
-            let mut can_follow = true;
-            for condition in &trans.conditions {
-                can_follow &= condition.is_valid(&cfs);
-            }
+        //    let mut can_follow = true;
+        //    for condition in &trans.conditions {
+        //        can_follow &= condition.is_valid(&cfs);
+        //    }
+
+            // Add temporal limit
 
             // emit all events and change state is possible
-            if can_follow {
-                self.change_current_state(trans.to.clone());
-                result_events = trans.emit.clone();
-                break;
-            }
-        }
+        //    if can_follow {
+        //        self.change_current_state(trans.to.clone());
+        //        result_events = trans.emit.clone();
+        //        break;
+        //    }
+        //}
 
         // Check all warnings
         let mut result_warnings = vec![];
@@ -213,6 +236,33 @@ where
             if warn.progress >= warn.threshold {
                 result_warnings.push(warn.warning.clone());
             }
+        }
+
+        // Check all transitions
+        let mut transition = None;
+        for ptrans in &mut self.transition_progress {
+
+            // check all conditions for this transition
+            ptrans.progress = if ptrans.transition.conditions.iter().all(|w| w.is_valid(&cfs)) { 
+                dbg!("progress added: {}/{}", ptrans.progress, ptrans.threshold);
+                ptrans.progress + deltatime // Add progress
+            } else {
+                ptrans.progress
+            };
+
+            // If progress is complete flag as active transition
+            if ptrans.progress >= ptrans.threshold {
+                transition = Some(ptrans.transition.clone());
+                dbg!("active transition!");
+                break;
+            } 
+        }
+
+        // Emit all events and change state
+        if let Some(transition) = transition {
+            self.change_current_state(transition.to.clone());
+            result_events = transition.emit.clone();
+            dbg!("changed state!");
         }
 
         ProgresState {
