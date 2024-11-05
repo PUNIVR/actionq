@@ -246,7 +246,7 @@ where
 
             // check all conditions for this transition
             ptrans.progress = if ptrans.transition.conditions.iter().all(|w| w.is_valid(&cfs)) { 
-                dbg!("progress added: {}/{}", ptrans.progress, ptrans.threshold);
+                //dbg!("progress added: {}/{}", ptrans.progress, ptrans.threshold);
                 ptrans.progress + deltatime // Add progress
             } else {
                 ptrans.progress
@@ -255,7 +255,7 @@ where
             // If progress is complete flag as active transition
             if ptrans.progress >= ptrans.threshold {
                 transition = Some(ptrans.transition.clone());
-                dbg!("active transition!");
+                //dbg!("active transition!");
                 break;
             } 
         }
@@ -264,7 +264,7 @@ where
         if let Some(transition) = transition {
             self.change_current_state(transition.to.clone());
             result_events = transition.emit.clone();
-            dbg!("changed state!");
+            //dbg!("changed state!");
         }
 
         ProgresState {

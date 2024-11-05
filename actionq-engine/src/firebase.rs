@@ -1,15 +1,92 @@
-use tokio::sync::oneshot::{Sender, Receiver};
-use firestore::{FirestoreListenEvent, FirestoreDb, FirestoreMemListenStateStorage, FirestoreListenerTarget};
-use serde::{Serialize, Deserialize};
-use crate::session::SessionProxy;
-use crate::network::Requests;
+use firestore::{FirestoreListenEvent, FirestoreDb, FirestoreMemListenStateStorage, FirestoreListenerTarget, paths};
+use tokio::sync::mpsc::{Sender, Receiver};
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Document {
-    #[serde(alias = "_firestore_id")]
-    doc_id: Option<String>,
-    #[serde(flatten)]
-    request: Requests
+use crate::session::SessionProxy;
+use crate::common::{Request, RequestExerciseReps};
+
+/// Data definitions inside of firebase
+mod model {
+    use serde::{Serialize, Deserialize};
+    use crate::common::{Request, RequestExerciseReps};
+
+    /// Exercise definition
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct Exercise {
+        pub name: String,
+        pub description: String,
+        pub video_filepath: String,
+        pub fsm: String
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub enum JetsonState { Offline, Listening, Running }
+
+    /// Jetson commands interface
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct JetsonInterface {
+        pub state: JetsonState,
+        pub request: Option<Request>
+    }
+}
+
+/// Utility struct to interact with the firestore database
+struct Firestore {
+    pub patient_id: String,
+    pub db: FirestoreDb
+}
+
+impl Firestore {
+    /// Create a new firestore database connection
+    pub async fn new(google_progect_id: &str, patient_id: &str) -> Self {
+        Self { 
+            patient_id: patient_id.to_owned(),
+            db: FirestoreDb::new(google_progect_id).await
+                .expect("unable to connect to firebase")
+        }
+    }
+
+    /// Get an exercise by it's Id
+    pub async fn get_exercise(&self, exercise_id: &str) -> Option<model::Exercise> {
+        self.db.fluent().select()
+            .by_id_in("exercises")
+            .obj()
+            .one(exercise_id)
+            .await.unwrap()
+    }
+
+    /// Set the state of the Jetson
+    pub async fn set_jeston_state(&self, state: model::JetsonState) {
+        let object = model::JetsonInterface { state, request: None };
+        self.db.fluent().update()
+            .fields(paths!(model::JetsonInterface::state))
+            .in_col("jetson")
+            .document_id(&self.patient_id)
+            .object(&object)
+            .execute::<model::JetsonInterface>()
+            .await.unwrap();
+    }
+}
+
+/// All accepted commands for Firebase
+#[derive(Debug)]
+pub enum FirebaseCommand {
+    GetExerciseDefinition {
+        respond_to: tokio::sync::oneshot::Sender<Option<model::Exercise>>,
+        /// Id of the requested exercise
+        exercise_id: String
+    }
+}
+
+#[derive(Debug)]
+pub struct FirebaseProxy(pub tokio::sync::mpsc::Sender<FirebaseCommand>);
+impl FirebaseProxy {
+    pub async fn get_exercise(&self, exercise_id: &str) -> Option<model::Exercise> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.0.send(FirebaseCommand::GetExerciseDefinition {
+            respond_to: tx, exercise_id: exercise_id.to_owned()
+        }).await.unwrap();
+        rx.await.unwrap()
+    }
 }
 
 #[tracing::instrument(skip_all)]
@@ -20,7 +97,7 @@ async fn on_event(event: FirestoreListenEvent, session: SessionProxy) {
             if let Some(doc) = &doc_change.document {
 
                 // Try deserialize the document into a command
-                let doc = match FirestoreDb::deserialize_doc_to::<Document>(doc) {
+                let doc = match FirestoreDb::deserialize_doc_to::<model::JetsonInterface>(doc) {
                     Ok(doc) => doc,
                     Err(e) => {
                         tracing::error!("cannot deserialize request: {}", e);
@@ -31,24 +108,22 @@ async fn on_event(event: FirestoreListenEvent, session: SessionProxy) {
                 tracing::trace!("request: {:?}", doc);
 
                 // Send request to session
-                match doc.request {
-                    Requests::SessionStart => {
-                        tracing::info!("request: session start");
-                        session.session_start().await;
+                if let Some(request) = doc.request {
+                    match request {
+                        Request::SessionStart { exercises, save } => {
+                            tracing::info!("request: session start");
+                            session.session_start(exercises, save).await;
+                        }
+                        Request::SessionEnd => {
+                            tracing::info!("request: session end");
+                            session.session_end().await;
+                        },
+                        Request::SetPlayState { running } => {
+                            tracing::info!("request: set play state (running -> {})", running);
+                            session.set_play_state(running).await;
+                        },
+                        _ => unimplemented!()
                     }
-                    Requests::SessionEnd => {
-                        tracing::info!("request: session end");
-                        session.session_end().await;
-                    },
-                    Requests::ExerciseStart { exercise_id } => {
-                        tracing::info!("request: exercise start");
-                        session.exercise_start(exercise_id).await;
-                    },
-                    Requests::ExerciseEnd => {
-                        tracing::info!("request: exercise end");
-                        session.exercise_end().await;
-                    },
-                    _ => unimplemented!()
                 }
             }
         }
@@ -59,29 +134,32 @@ async fn on_event(event: FirestoreListenEvent, session: SessionProxy) {
 
 }
 
-#[tracing::instrument(skip(session, kill))]
-async fn listen_commands(patient_id: String, database_id: String, session: SessionProxy, kill: Receiver<()>) {
+#[tracing::instrument(skip(session, cmds))]
+pub async fn listen_commands(patient_id: &str, database_id: &str, session: SessionProxy, mut cmds: Receiver<FirebaseCommand>) {
 
     tracing::info!("connecting to firestore database");
-    let db = FirestoreDb::new(database_id)
-        .await.expect("unable to connect to firestore database");
+    let firestore = Firestore::new(&database_id, &patient_id).await;
 
     // Add commands document for the patient
     tracing::info!("reseting commands document for patient");
-    let doc = Document { doc_id: None, request: Requests::SessionEnd };
-    let doc_res: Document = db.fluent().update().in_col("commands")
+    let doc = model::JetsonInterface { request: Some(Request::SessionEnd), state: model::JetsonState::Listening };
+    let doc_res: model::JetsonInterface = firestore.db.fluent().update().in_col("jetson")
         .document_id(&patient_id).object(&doc)
         .execute().await.expect("unable to add patient's command document");
 
     // Listen to collection's mutations
     tracing::info!("creating listener for commands of patient");
-    let mut listener = db.create_listener(FirestoreMemListenStateStorage::new())
+    let mut listener = firestore.db.create_listener(FirestoreMemListenStateStorage::new())
         .await.expect("unable to create listener for document changes");
 
-    db.fluent().select().by_id_in("commands").batch_listen([patient_id])
+    firestore.db.fluent().select().by_id_in("jetson").batch_listen([patient_id])
         .add_target(FirestoreListenerTarget::new(78), &mut listener)
         .expect("unable to attach listener to commands of patient");
     
+    // Notify that we are listening for commands
+    tracing::info!("setting jetson state to 'listening'");
+    firestore.set_jeston_state(model::JetsonState::Listening).await;
+
     // Start background listener as a tokio task
     listener.start(move |event| {
         let session = session.clone();
@@ -91,15 +169,19 @@ async fn listen_commands(patient_id: String, database_id: String, session: Sessi
         }
     }).await.expect("unable to listen to changes");
 
-    // Wait for exit signal
-    kill.await.unwrap();
+    // Handle other commands
+    while let Some(cmd) = cmds.recv().await {
+        match cmd {
+            FirebaseCommand::GetExerciseDefinition { respond_to, exercise_id } => {
+                respond_to.send(firestore.get_exercise(&exercise_id).await)
+                    .expect("unable to respond");            
+            }
+        }
+    }
 
+    // Notify that we stoppend listening for commands
+    tracing::info!("setting jetson state to 'offline'");
+    firestore.set_jeston_state(model::JetsonState::Offline).await;
     listener.shutdown().await
         .expect("unable to shutdown listener");
-}
-
-pub fn run_event_listener(patient_id: &str, database_id: &str, session: &SessionProxy) -> Sender<()> {
-    let (kill_tx, kill_rx) = tokio::sync::oneshot::channel();
-    tokio::spawn(listen_commands(patient_id.into(), database_id.into(), session.clone(), kill_rx));
-    kill_tx
 }

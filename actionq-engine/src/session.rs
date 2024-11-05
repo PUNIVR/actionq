@@ -6,7 +6,11 @@ use glam::Vec2;
 use std::ops::Deref;
 
 use crate::pose::{PoseEventSender, PoseEventSink, PoseProxy};
+use crate::common::RequestExerciseReps;
+use crate::firebase::FirebaseProxy;
+use crate::exercise::JsonExercise;
 use crate::ui::UiProxy;
+
 use videopose::{FrameData, Framebuffer};
 use motion::{
     MotionAnalyzer, 
@@ -23,170 +27,14 @@ use motion::{
 };
 
 pub enum Command {
-    /// Signal to the session controller that we are interested in receiving data
-    ConnectToDataStream { 
-        respond_to: oneshot::Sender<broadcast::Receiver<SessionPoseData>>
+    SessionStart {
+        exercises: Vec<RequestExerciseReps>,
+        save: bool
     },
-
-    SessionStart,
+    SetPlayState {
+        running: bool,
+    },
     SessionEnd,
-    ExerciseStart {
-        exercise_id: usize,
-    },
-    ExerciseEnd,
-}
-
-#[derive(PartialEq, Debug)]
-enum SessionState {
-    Idle,
-    SessionIdle,
-    ExerciseRunning,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct JsonState {
-    /// Unique name
-    name: String,
-    /// All transitions to other states
-    transitions: Vec<motion::Transition>,
-    /// Warnings active only in this state
-    warnings: Vec<motion::Warning>,
-}
-
-/// An exercise specified using json
-#[derive(Debug, Clone, Deserialize)]
-struct JsonExercise {
-    /// All the possible states
-    states: Vec<JsonState>,
-    /// Initial state the analyzer will start in
-    initial_state: String,
-    /// Global warnings active in all states
-    warnings: Vec<motion::Warning>,
-}
-
-impl JsonExercise {
-    
-    /// A very simple example exercise 
-    pub fn simple() -> Self {
-        Self {
-            states: vec![
-                JsonState {
-                    name: "start".into(),
-                    warnings: vec![],
-                    transitions: vec![
-                        Transition {
-                            to: "down".into(),
-                            emit: vec![],
-                            conditions: vec![
-                                motion::MappedCondition {
-                                    control_factor: "arm_angle_l".into(),
-                                    condition: motion::Condition::InRange {
-                                        range: (0.0..30.0),
-                                    },
-                                },
-                                motion::MappedCondition {
-                                    control_factor: "arm_angle_r".into(),
-                                    condition: motion::Condition::InRange {
-                                        range: (0.0..30.0),
-                                    },
-                                },
-                            ],
-                        },
-                    ],
-                },
-                JsonState {
-                    name: "up".into(),
-                    warnings: vec![],
-                    transitions: vec![
-                        Transition {
-                            to: "down".into(),
-                            emit: vec![motion::Event::RepetitionComplete],
-                            conditions: vec![
-                                motion::MappedCondition {
-                                    control_factor: "arm_angle_l".into(),
-                                    condition: motion::Condition::InRange {
-                                        range: (0.0..30.0),
-                                    },
-                                },
-                                motion::MappedCondition {
-                                    control_factor: "arm_angle_r".into(),
-                                    condition: motion::Condition::InRange {
-                                        range: (0.0..30.0),
-                                    },
-                                },
-                            ],
-                        },
-                    ],
-                },
-                JsonState {
-                    name: "down".into(),
-                    warnings: vec![],
-                    transitions: vec![
-                        motion::Transition {
-                            to: "up".into(),
-                            emit: vec![],
-                            conditions: vec![
-                                motion::MappedCondition {
-                                    control_factor: "arm_angle_l".into(),
-                                    condition: motion::Condition::InRange {
-                                        range: (45.0..90.0),
-                                    },
-                                },
-                                motion::MappedCondition {
-                                    control_factor: "arm_angle_r".into(),
-                                    condition: motion::Condition::InRange {
-                                        range: (45.0..90.0),
-                                    },
-                                },
-                            ],
-                        },
-                    ],
-                },
-            ],
-            initial_state: "start".into(),
-            warnings: vec![]
-        }
-    }
-
-    pub fn from_file<S: AsRef<str>>(filepath: S) -> Self {
-        let string = fs::read_to_string(filepath.as_ref()).unwrap();
-        Self::from_str(string)
-    }
-
-    pub fn from_str<S: AsRef<str>>(string: S) -> Self {
-        serde_json::from_str::<Self>(string.as_ref()).unwrap()
-    }
-}
-
-impl Exercise for JsonExercise {
-
-    fn states(&self) -> Vec<String> {
-        self.states.iter()
-            .map(|s| s.name.clone())
-            .collect()
-    }
-
-    fn initial_state(&self) -> String {
-        self.initial_state.clone()
-    }
-
-    fn state_transitions(&self, state: &String) -> Vec<Transition> {
-        self.states.iter()
-            .filter(|s| s.name == *state)
-            .flat_map(|s| s.transitions.clone())
-            .collect()
-    }
-
-    fn state_warnings(&self, state: &StateId) -> Vec<Warning> {
-        self.states.iter()
-            .filter(|s| s.name == *state)
-            .flat_map(|s| s.warnings.clone())
-            .collect()
-    }
-
-    fn global_warnings(&self) -> Vec<Warning> {
-        self.warnings.clone()
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -225,52 +73,101 @@ impl GenControlFactors for SessionPoseData {
 }
 
 #[derive(Debug)]
+struct ExerciseState {
+    /// Id of the exercise inside the database
+    pub exercise_id: String,
+    /// Analyzer to evaluate the exercise's execution
+    pub analyzer: MotionAnalyzer<JsonExercise>,
+    /// Number of repetitions done until now
+    pub num_repetitions_done: u32,
+    /// Number of repetitions to do
+    pub num_repetitions: u32,
+}
+
+impl ExerciseState {
+    pub fn completed(&self) -> bool {
+        self.num_repetitions_done >= self.num_repetitions
+    }
+
+    /// Returns true if it is complete
+    pub fn add_repetition(&mut self) -> bool {
+        self.num_repetitions_done += 1;
+        self.completed()
+    }
+}
+
+#[derive(Debug)]
+struct SessionState {
+    /// All the exercises to execute during this session
+    pub exercises: Vec<ExerciseState>,
+    /// The currently active exercise index
+    pub current_idx: usize,
+    /// If true then run analyzer and store logs, otherwise skip frames analysis
+    pub running: bool,
+}
+
+impl SessionState {
+    pub fn current_exercise(&mut self) -> &mut ExerciseState {
+        &mut self.exercises[self.current_idx]
+    }
+
+    // Return true if there is a next exercise, in that case increment inner counter
+    pub fn next_exercise(&mut self) -> bool {
+        self.current_idx += 1;
+        if self.current_idx < self.exercises.len() {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(Debug)]
 struct Session {
+    /// Channel to receive session commands
     receiver: mpsc::Receiver<Command>,
-    data_sender: broadcast::Sender<SessionPoseData>,
-    state: SessionState,
-
-    in_progress: bool,
+    /// The current session, if present
+    session: Option<SessionState>,
+    /// If true then entirelly skip processing frames, 
+    /// this is necessary for resiliency during session end
+    ignore_frames: bool,
+    /// Channel used to receive poses from the HPE
     pose_receiver: mpsc::Receiver<FrameData>,
+    /// Proxy to command the HPE system
     pose: PoseProxy,
+    /// Proxy to command the TV's ui.
     ui: UiProxy,
+    /// Proxy to command the firebase database
+    firebase: FirebaseProxy,
 
-    /// Store the current exercise data
-    current_exercise_data: Vec<SessionPoseData>,
-    analyzer: Option<MotionAnalyzer<JsonExercise>>
+    // Broadcast the pose analysis, useful in future for more developed UIs 
+    //_data_sender: broadcast::Sender<SessionPoseData>,
 }
 
 #[derive(Clone, Debug)]
 pub struct SessionProxy(mpsc::Sender<Command>);
 impl SessionProxy {
 
-    pub async fn connect_output_stream(&self) -> broadcast::Receiver<SessionPoseData> {
-        let (tx, rx) = oneshot::channel();
-        self.0
-            .send(Command::ConnectToDataStream { respond_to: tx })
-            .await
-            .unwrap();
-        rx.await.unwrap()
+    // TODO
+    //pub async fn connect_output_stream(&self) -> broadcast::Receiver<SessionPoseData> {
+    //    let (tx, rx) = oneshot::channel();
+    //    self.0
+    //        .send(Command::ConnectToDataStream { respond_to: tx })
+    //        .await
+    //        .unwrap();
+    //    rx.await.unwrap()
+    //}
+
+    pub async fn session_start(&self, exercises: Vec<RequestExerciseReps>, save: bool) {
+        self.0.send(Command::SessionStart { exercises, save }).await.unwrap();
     }
 
-    pub async fn session_start(&self) {
-        self.0.send(Command::SessionStart).await.unwrap();
-    }
     pub async fn session_end(&self) {
         self.0.send(Command::SessionEnd).await.unwrap();
     }
-    pub async fn exercise_start(&self, exercise_id: usize) {
-        self.0
-            .send(Command::ExerciseStart { exercise_id })
-            .await
-            .unwrap();
-    }
-    pub async fn exercise_end(&self) {
-        self.0.send(Command::ExerciseEnd).await.unwrap();
-    }
 
-    pub async fn send(&self, cmd: Command) {
-        self.0.send(cmd).await.unwrap();
+    pub async fn set_play_state(&self, running: bool) {
+        self.0.send(Command::SetPlayState { running }).await.unwrap();
     }
 }
 
@@ -278,26 +175,26 @@ impl Session {
     fn instantiate(
         pose: &PoseProxy,
         pose_receiver: mpsc::Receiver<FrameData>,
-        ui: UiProxy
+        ui: UiProxy,
+        firebase: FirebaseProxy
     ) -> (Self, SessionProxy) {
 
         // Broadcast channel used to send analyzed data
-        let (final_sender, final_receiver) = broadcast::channel(100);
-        drop(final_receiver);
+        //let (final_sender, final_receiver) = broadcast::channel(100);
+        //drop(final_receiver);
 
         // Channel used to comunicate with actor
         let (tx, rx) = mpsc::channel(100);
         (
             Self {
                 receiver: rx,
-                data_sender: final_sender,
+                //_data_sender: final_sender,
                 pose_receiver,
-                state: SessionState::Idle,
-                current_exercise_data: vec![],
-                analyzer: None,
-                in_progress: false,
+                ignore_frames: true,
+                session: None,
                 pose: pose.clone(),
-                ui: ui
+                ui,
+                firebase
             },
             SessionProxy(tx),
         )
@@ -308,72 +205,89 @@ impl Session {
         std::process::Command::new("./turn_on.sh").output()
     }
 
+    #[tracing::instrument(skip_all, fields(exercises, save))]
+    async fn session_start(&mut self, exercises: Vec<RequestExerciseReps>, save: bool) {
+        // There is already a session active!
+        if let Some(_) = &self.session {
+            tracing::warn!("invalid state for session start");
+            return;
+        }
+
+        // Send CEC command to turn on the TV
+        self.send_cec_signal()
+            .expect("unable to turn on TV");
+
+        // Load exercises collection
+        let mut states: Vec<ExerciseState> = vec![];
+        for e in &exercises {
+
+            // Obtain the exercise descriptor from the database
+            let descriptor = self.firebase.get_exercise(&e.exercise_id).await;
+            if let Some(descriptor) = descriptor {
+                let analyzer = MotionAnalyzer::new(JsonExercise::from_str(descriptor.fsm));
+                states.push(ExerciseState {
+                    exercise_id: e.exercise_id.clone(),
+                    analyzer: analyzer,
+                    num_repetitions: e.num_repetitions,
+                    num_repetitions_done: 0
+                });
+            } else {
+                tracing::error!("unable to find exercise with id: {}", e.exercise_id);
+                return;
+            }
+        }
+
+        self.session = Some(
+            SessionState {
+                current_idx: 0,
+                running: true,
+                exercises: states
+            }
+        );
+
+        // Notify other actors to start HPE inference and visualization 
+        self.pose.inference_start().await;
+        self.ui.exercise_show(1 /* TODO: set correct path */).await;
+        self.ignore_frames = false;
+
+        tracing::info!("session started");
+    }
+
+    #[tracing::instrument(skip_all, fields(running))]
+    fn set_play_state(&mut self, running: bool) {
+        if let Some(session) = self.session.as_mut() {
+            tracing::info!("set play state to {}", running);
+            session.running = running;
+        } else {
+            tracing::warn!("invalid state for changing play state: no session active");
+        }
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn session_end(&mut self) {
+        // There is not session to end!
+        if let None = self.session {
+            tracing::warn!("invalid state for session end");
+            return;
+        }
+
+        // Notify other actors to stop
+        self.pose.inference_end().await;
+        self.ui.exercise_stop().await;
+        self.ignore_frames = true;
+
+        // TODO: save to database
+        // for now simulate a drop of the current session
+        self.session = None;
+        tracing::info!("session ended");
+    }
+
     #[tracing::instrument(skip_all, fields(cmd))]
     async fn handle_command(&mut self, cmd: Command) {
         match cmd {
-            Command::ConnectToDataStream { respond_to } => {
-                let data_receiver = self.data_sender.subscribe();
-                respond_to.send(data_receiver).unwrap();
-            }
-
-            Command::SessionStart => {
-                if self.state != SessionState::Idle {
-                    tracing::warn!("invalid state for session start");
-                    return;
-                }
-
-                // Send CEC command to turn on the TV
-                self.send_cec_signal()
-                    .expect("unable to turn on TV");
-
-                // TODO: load exercises collection
-
-                self.state = SessionState::SessionIdle;
-                tracing::info!("session started");
-            }
-            Command::ExerciseStart { exercise_id } => {
-                if self.state != SessionState::SessionIdle {
-                    tracing::warn!("invalid state for exercise start");
-                    return;
-                }
-
-                // Setup motion analyzer and storage
-                self.current_exercise_data.clear();
-                self.analyzer = Some(MotionAnalyzer::new(JsonExercise::simple()));
-                self.pose.inference_start().await;
-
-                // Start visualization
-                self.ui.exercise_show(exercise_id).await;
-
-                self.state = SessionState::ExerciseRunning;
-                tracing::info!("exercise started ({})", exercise_id);
-            }
-            Command::ExerciseEnd => {
-                if self.state != SessionState::ExerciseRunning {
-                    tracing::warn!("invalid state for exercise end");
-                    return;
-                }
-
-                // Stop pose estimator
-                self.pose.inference_end().await;
-
-                // Stop visualization
-                self.ui.exercise_stop().await;
-
-                self.state = SessionState::SessionIdle;
-                tracing::info!("exercise ended");
-            }
-            Command::SessionEnd => {
-                if self.state != SessionState::SessionIdle {
-                    tracing::warn!("invalid state for session end");
-                    return;
-                }
-
-                // TODO: save to database
-
-                self.state = SessionState::Idle;
-                tracing::info!("session ended");
-            }
+            Command::SessionStart { exercises, save } => self.session_start(exercises, save).await,
+            Command::SetPlayState { running } => self.set_play_state(running),
+            Command::SessionEnd => self.session_end().await,
             _ => todo!(),
         }
     }
@@ -392,31 +306,59 @@ impl Session {
 
                 // Handle data from pose estimator
                 pose_data = self.pose_receiver.recv() => {
+                    if self.ignore_frames {
+                        continue;
+                    }
+
+                    // TODO: use real deltatime
+                    const DELTATIME: f32 = 0.1;
+
+                    // Analyze only if there is a subject
                     if let Some(pose_prepose) = pose_data {
-                        tracing::trace!("receive pose data and framebuffer");
-                        
-                        // Analyze only if there is a subject
                         let pose = SessionPoseData(pose_prepose);
                         if pose.subjects != 0 {
 
-                            // Save pose for later storage
-                            //self.current_exercise_data.push(pose.clone());
-
-                            // TODO: use real deltatime
-                            let deltatime = 0.1;
-                            if let Some(analyzer) = &mut self.analyzer {
-                                let progress = analyzer.progress(deltatime, &pose);
-				                tracing::trace!("{:?}", progress);
-
-                                // Send progress to UI
-                                // FIXME: remove clone
-                                self.ui.update(progress, pose.framebuffer.clone()).await;
-
+                            // If the pose estimator is running then we must have a current session!
+                            let mut progress = None;
+                            if let Some(session) = self.session.as_mut() {
+                                // Analyze the movement
+                                if session.running {
+                                    tracing::trace!("running exercise analyzer");
+                                    progress = Some(session.current_exercise().analyzer.progress(DELTATIME, &pose));
+                                    tracing::trace!("{:?}", progress);
+                                }
                             } else {
-                                println!("warning: running exercise without an analyzer!")
+                                tracing::error!("The pose estimator is running without an active session!");
+                                assert!(false); // This can not be
                             }
 
-                            // Broadcast pose to connections
+                            // Handle events
+                            if let Some(progress) = progress {
+                                for event in &progress.events {
+                                    match event {
+                                        Event::RepetitionComplete => {
+
+                                            // Update repetition count and check if session is completed
+                                            let session = self.session.as_mut().unwrap();
+                                            if session.current_exercise().add_repetition() {
+                                                tracing::info!("exercise completed");
+
+                                                // Change exercise and check if session has ended
+                                                if !session.next_exercise() {
+                                                    tracing::info!("session completed");
+                                                    self.session_end().await;
+                                                }
+                                            }
+
+                                        }
+                                    }
+                                }
+
+                                // Send progress to UI
+                                self.ui.update(progress, pose.framebuffer.clone()).await;
+                            }
+
+                            // TODO: Broadcast pose to connections
                             // TODO: add analyzer output to broadcast
                             //self.data_sender.send(pose).unwrap();
 
@@ -430,8 +372,8 @@ impl Session {
     }
 }
 
-pub fn run_session(pose: &PoseProxy, pose_receiver: mpsc::Receiver<FrameData>, ui: UiProxy) -> SessionProxy {
-    let (session, proxy) = Session::instantiate(pose, pose_receiver, ui);
+pub fn run_session(pose: &PoseProxy, pose_receiver: mpsc::Receiver<FrameData>, ui: UiProxy, firebase: FirebaseProxy) -> SessionProxy {
+    let (session, proxy) = Session::instantiate(pose, pose_receiver, ui, firebase);
     tokio::spawn(session.run_session());
     proxy
 }
