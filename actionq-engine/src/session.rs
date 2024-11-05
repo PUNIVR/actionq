@@ -406,7 +406,7 @@ impl Session {
                             let deltatime = 0.1;
                             if let Some(analyzer) = &mut self.analyzer {
                                 let progress = analyzer.progress(deltatime, &pose);
-                                //println!("{:?}", progress);
+				                tracing::trace!("{:?}", progress);
 
                                 // Send progress to UI
                                 // FIXME: remove clone
