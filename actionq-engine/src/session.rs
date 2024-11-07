@@ -46,30 +46,189 @@ impl Deref for SessionPoseData {
     }
 }
 
+/*
+"nose" => 0
+"left_eye" => 1
+"right_eye" => 2
+"left_ear" => 3
+"right_ear" => 4
+"left_shoulder" => 5
+"right_shoulder" => 6
+"left_elbow" => 7
+"right_elbow" => 8
+"left_wrist" => 9
+"right_wrist" => 10
+"left_hip" => 11
+"right_hip" => 12
+"left_knee" => 13
+"right_knee" => 14
+"left_ankle" => 15
+"right_ankle" => 16
+"neck" => 17
+*/
+
+const DOWN:  Vec2 = Vec2::new( 0.0, -1.0);
+const UP:    Vec2 = Vec2::new( 0.0,  1.0);
+const LEFT:  Vec2 = Vec2::new(-1.0,  0.0);
+const RIGHT: Vec2 = Vec2::new( 1.0,  0.0);
+
+/// Degrees between two vectors
+fn degrees(a: Vec2, b: Vec2) -> f32 {
+    a.angle_to(b).to_degrees().abs()
+}
+
+impl SessionPoseData {
+
+    fn arm_angle_with_body(&self, side: &str) -> f32 {
+
+        let shoulder = self.keypoint_from_name(&format!("{}_shoulder", side)).unwrap();
+        let elbow = self.keypoint_from_name(&format!("{}_elbow", side)).unwrap();
+
+        // Direction from shoulder to elbow
+        let dir = (elbow - shoulder).normalize(); 
+        return dir.dot(DOWN).abs().acos().to_degrees()
+    }
+
+    fn inner_angle(&self, beg: &str, mid: &str, end: &str) -> f32 {
+
+        let beg = self.keypoint_from_name(beg).unwrap();
+        let mid = self.keypoint_from_name(mid).unwrap();
+        let end = self.keypoint_from_name(end).unwrap();
+
+        let mid2beg = (beg - mid).normalize();
+        let mid2end = (end - mid).normalize();
+
+        let angle = degrees(mid2beg, mid2end);
+        return angle;
+    }
+
+    fn arm_inner_angle_left(&self) -> f32 {
+
+        let shoulder = self.keypoint_from_name("left_shoulder").unwrap();
+        let elbow = self.keypoint_from_name("left_elbow").unwrap();
+        let wrist = self.keypoint_from_name("left_wrist").unwrap();
+
+        let elbow2shoulder = (shoulder - elbow).normalize();
+        let elbow2wrist = (wrist - elbow).normalize();
+
+        degrees(elbow2shoulder, elbow2wrist)
+    }
+
+    fn arm_inner_angle_right(&self) -> f32 {
+
+        let shoulder = self.keypoint_from_name("right_shoulder").unwrap();
+        let elbow = self.keypoint_from_name("right_elbow").unwrap();
+        let wrist = self.keypoint_from_name("right_wrist").unwrap();
+
+        dbg!(shoulder, elbow, wrist);
+
+        let elbow2shoulder = (shoulder - elbow).normalize();
+        let wrist2elbow = (wrist - elbow).normalize();
+
+        degrees(elbow2shoulder, wrist2elbow)
+    }
+
+    //fn arm_inner_angle(&self, side: &str) -> f32 {
+    //    self.inner_angle(
+    //        &format!("{}_shoulder", side),
+    //        &format!("{}_elbow", side),
+    //        &format!("{}_wrist", side)
+    //    )
+    //}
+
+    /*
+    /// Angle of the arm from the shoulder axis 
+    fn arm_shoulder_angle(&self, side: &str) -> f32 {
+
+        let neck = self.keypoint_from_name("neck").unwrap();
+        let shoulder = self.keypoint_from_name(&format!("{}_shoulder", side)).unwrap();
+        let elbow = self.keypoint_from_name(&format!("{}_elbow", side)).unwrap();
+
+        let neck2shoulder = (shoulder - neck).normalize();
+        let shoulder2elbow = (elbow - shoulder).normalize();
+
+        return degrees(neck2shoulder, shoulder2elbow);
+    }
+
+    fn torso_down_vector(&self) -> Vec2 {
+
+        let neck = self.keypoint_from_name("neck").unwrap();
+        let mut mid_hip = self.keypoint_from_name("right_hip").unwrap() + self.keypoint_from_name("left_hip").unwrap();
+        mid_hip /= 2.0; 
+
+        return (mid_hip - neck).normalize();
+    }
+
+    /// Angle of the arm from the vertical body axis
+    fn arm_torso_angle(&self, side: &str) -> f32 {
+
+        let shoulder = self.keypoint_from_name(&format!("{}_shoulder", side)).unwrap();
+        let elbow = self.keypoint_from_name(&format!("{}_elbow", side)).unwrap();
+        let shoulder2elbow = (elbow - shoulder).normalize();
+        
+        let torso = self.torso_down_vector();
+        return degrees(shoulder2elbow, torso);
+    }
+    */
+}
+
 /// Extract control factors from the pose data
 impl GenControlFactors for SessionPoseData {
+
+    //fn control_factors(&self) -> ControlFactorMap {
+    //
+    //    // vector in the down direction
+    //    let down = Vec2::new(0.0, -1.0);
+    //
+    //    let ls = self.keypoint_from_name("left_shoulder").unwrap();
+    //    let le = self.keypoint_from_name("left_elbow").unwrap();
+    //
+    //    let la = (le - ls).normalize(); // shoulder to elbow
+    //    let adl = la.dot(down).abs().acos().to_degrees();
+    //
+    //    let rs = self.keypoint_from_name("right_shoulder").unwrap();
+    //    let re = self.keypoint_from_name("right_elbow").unwrap();
+    //
+    //    let ra = (re - rs).normalize(); // shoulder to elbow
+    //    let adr = ra.dot(down).abs().acos().to_degrees();
+    //
+    //    BTreeMap::from([
+    //        ("arm_angle_l".into(), adl),
+    //        ("arm_angle_r".into(), adr),
+    //    ])
+    //}
+
     fn control_factors(&self) -> ControlFactorMap {
+        let result = BTreeMap::from([
 
-        // vector in the down direction
-        let down = Vec2::new(0.0, -1.0);
+            ("arm_angle_l".into(), self.arm_angle_with_body("left")),
+            ("arm_angle_r".into(), self.arm_angle_with_body("right")),
 
-        let ls = self.keypoint_from_name("left_shoulder").unwrap();
-        let le = self.keypoint_from_name("left_elbow").unwrap();
+            // The inner angle of the arms
+            ("arm_inner_angle_l".into(), self.arm_inner_angle_left()),
+            //("arm_inner_angle_r".into(), self.arm_inner_angle("right")),
 
-        let la = (le - ls).normalize(); // shoulder to elbow
-        let adl = la.dot(down).abs().acos().to_degrees();
+            // Degrees from the horizontal shoulder axis and the arm axis
+            //("arm_horiz_angle_l".into(), 180.0 - self.arm_shoulder_angle("left")),
+            //("arm_horiz_angle_r".into(), self.arm_shoulder_angle("right")),
 
-        let rs = self.keypoint_from_name("right_shoulder").unwrap();
-        let re = self.keypoint_from_name("right_elbow").unwrap();
+            // Degrees from the vertical torso axis and the arm axis
+            //("arm_vert_angle_l".into(), self.arm_torso_angle("left")),
+            //("arm_vert_angle_r".into(), self.arm_torso_angle("right")),
+        ]);
 
-        let ra = (re - rs).normalize(); // shoulder to elbow
-        let adr = ra.dot(down).abs().acos().to_degrees();
+        // OK FUNZIONA! MANO DESTRA!
+        let inner_L_angle = self.arm_inner_angle_left();
+        dbg!(inner_L_angle);
 
-        BTreeMap::from([
-            ("arm_angle_l".into(), adl),
-            ("arm_angle_r".into(), adr),
-        ])
+        //dbg!(&self.keypoints);
+        //let inner_R_angle = self.arm_inner_angle_right();
+        //dbg!(inner_R_angle);
+
+        //tracing::trace!("control_factors: {:?}", result);
+        return result;
     }
+
 }
 
 #[derive(Debug)]
@@ -107,6 +266,11 @@ struct SessionState {
 }
 
 impl SessionState {
+
+    pub fn current_exercise_const(&self) -> &ExerciseState {
+        &self.exercises[self.current_idx]
+    }
+
     pub fn current_exercise(&mut self) -> &mut ExerciseState {
         &mut self.exercises[self.current_idx]
     }
@@ -224,6 +388,7 @@ impl Session {
             // Obtain the exercise descriptor from the database
             let descriptor = self.firebase.get_exercise(&e.exercise_id).await;
             if let Some(descriptor) = descriptor {
+                tracing::info!("loaded descriptor for exercise {}", &e.exercise_id);
                 let analyzer = MotionAnalyzer::new(JsonExercise::from_str(descriptor.fsm));
                 states.push(ExerciseState {
                     exercise_id: e.exercise_id.clone(),
@@ -247,7 +412,8 @@ impl Session {
 
         // Notify other actors to start HPE inference and visualization 
         self.pose.inference_start().await;
-        self.ui.exercise_show(1 /* TODO: set correct path */).await;
+        let session = self.session.as_ref().unwrap();
+        self.ui.exercise_show(session.current_exercise_const().exercise_id.clone()).await;
         self.ignore_frames = false;
 
         tracing::info!("session started");
@@ -311,7 +477,7 @@ impl Session {
                     }
 
                     // TODO: use real deltatime
-                    const DELTATIME: f32 = 0.1;
+                    const DELTATIME: f32 = 0.2;
 
                     // Analyze only if there is a subject
                     if let Some(pose_prepose) = pose_data {
@@ -347,6 +513,14 @@ impl Session {
                                                 if !session.next_exercise() {
                                                     tracing::info!("session completed");
                                                     self.session_end().await;
+                                                } else {
+                                                    tracing::info!("moving to next exercise");
+
+                                                    self.pose.inference_end().await;
+                                                    self.ui.exercise_stop().await;
+
+                                                    self.pose.inference_start().await;
+                                                    self.ui.exercise_show(session.current_exercise_const().exercise_id.clone()).await;
                                                 }
                                             }
 

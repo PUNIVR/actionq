@@ -1,0 +1,75 @@
+{
+    "states":[
+        {
+            "name":"start",
+            "transitions":[
+                {
+                    "conditions": [
+                        {
+                            "control_factor":"arm_inner_angle_l",
+                            "condition": {
+                                "InRange": {
+                                    "range": {
+                                        "start":160.0,
+                                        "end":180.0
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "to":"down",
+                    "emit":[]
+                }
+            ],
+            "warnings":[]
+        },
+        {
+            "name":"up",
+            "transitions":[
+                {
+                    "conditions": [
+                        {
+                            "control_factor":"arm_inner_angle_l",
+                            "condition": {
+                                "InRange": {
+                                    "range": {
+                                        "start":160.0,
+                                        "end":180.0
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "to":"down",
+                    "emit": ["RepetitionComplete"]
+                }
+            ],
+            "warnings":[]
+        },
+        {
+            "name":"down",
+            "transitions": [
+                {
+                    "conditions": [
+                        {
+                            "control_factor":"arm_inner_angle_l",
+                            "condition": {
+                                "InRange": {
+                                    "range": {
+                                        "start":20.0,
+                                        "end":60.0
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "to":"up",
+                    "emit":[]
+                }
+            ],
+            "warnings":[]
+        }
+    ],
+    "initial_state":"start",
+    "warnings":[]
+}

@@ -1,0 +1,108 @@
+{
+    "states":[
+        {
+            "name":"start",
+            "transitions":[
+                {
+                    "conditions": [
+                        {
+                            "control_factor":"arm_horiz_angle_l",
+                            "condition": {
+                                "InRange": {
+                                    "range": {
+                                        "start":0.0,
+                                        "end":35.0
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "control_factor":"arm_horiz_angle_r",
+                            "condition":{
+                                "InRange": {
+                                    "range": {
+                                        "start":0.0,
+                                        "end":35.0
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "to":"down",
+                    "emit":[]
+                }
+            ],
+            "warnings":[]
+        },
+        {
+            "name":"up",
+            "transitions":[
+                {
+                    "conditions": [
+                        {
+                            "control_factor":"arm_horiz_angle_l",
+                            "condition": {
+                                "InRange": {
+                                    "range": {
+                                        "start":0.0,
+                                        "end":35.0
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "control_factor":"arm_horiz_angle_r",
+                            "condition": {
+                                "InRange": {
+                                    "range": {
+                                        "start":0.0,
+                                        "end":35.0
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "to":"down",
+                    "emit": ["RepetitionComplete"]
+                }
+            ],
+            "warnings":[]
+        },
+        {
+            "name":"down",
+            "transitions": [
+                {
+                    "conditions": [
+                        {
+                            "control_factor":"arm_horiz_angle_l",
+                            "condition": {
+                                "InRange": {
+                                    "range": {
+                                        "start":45.0,
+                                        "end":70.0
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "control_factor":"arm_horiz_angle_r",
+                            "condition": {
+                                "InRange": {
+                                    "range": {
+                                        "start":45.0,
+                                        "end":70.0
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    "to":"up",
+                    "emit":[]
+                }
+            ],
+            "warnings":[]
+        }
+    ],
+    "initial_state":"start",
+    "warnings":[]
+}

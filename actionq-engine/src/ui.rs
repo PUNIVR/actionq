@@ -15,7 +15,7 @@ use motion::{
 #[derive(Debug)]
 pub enum Command {
     ExerciseStart {
-        exercise_id: usize,
+        exercise_id: String,
     },
     Update {
         progress: ProgresState,
@@ -28,7 +28,7 @@ pub enum Command {
 pub struct UiProxy(pub Sender<Command>);
 impl UiProxy {
     // Show exercise on UI
-    pub async fn exercise_show(&self, exercise_id: usize) {
+    pub async fn exercise_show(&self, exercise_id: String) {
         self.0.send(Command::ExerciseStart { exercise_id } ).await.unwrap();
     }
     // Display framedata
@@ -169,7 +169,7 @@ impl App for MyUi {
                     tracing::trace!("start exercise display");
                     
                     // Load the gif
-                    let exercise_data = std::fs::read(&format!("/home/nvidia/Repositories/actionq-core/exercises/{}/reference.webp", exercise_id)).unwrap();
+                    let exercise_data = std::fs::read(&format!("/home/nvidia/Repositories/actionq-core/exercises/{}.webp", exercise_id)).unwrap();
                     let exercise_frames = webp_animation::Decoder::new(&exercise_data).unwrap();
                     let exercise_frames: Vec<egui::ColorImage> = exercise_frames.into_iter()
                         .map(|f| { 
@@ -205,6 +205,7 @@ impl App for MyUi {
                     self.is_running = false;
                     self.exercise_gif = None;
                     self.current_frame = None;
+                    self.repetition_count = 0;
                 },
                 _ => {}
             }

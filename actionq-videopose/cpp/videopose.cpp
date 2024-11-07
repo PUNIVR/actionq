@@ -62,7 +62,7 @@ extern "C" {
 API int initialize(const char* network_path, const char* pose_path, const char* colors_path) {
 
     // TODO: find a way to handel this logger better
-    Log::SetLevel(Log::Level::WARNING);
+    Log::SetLevel(Log::Level::ERROR);
 
     // Initialize framebuffer to zeros
     memset(LAST_FB_DATA, 0, FB_BYTES);
@@ -70,7 +70,12 @@ API int initialize(const char* network_path, const char* pose_path, const char* 
     // Load network and create TRT engine
     g.overlay_flags = poseNet::OverlayFlagsFromStr("keypoints,links");
     g.network = poseNet::Create(network_path, pose_path, colors_path);
-    return (g.network) ? 0 : 1;
+    if (g.network) {
+        //g.network->SetThreshold(0.50);
+        return 0;
+    }
+
+    return 1;
 }
 
 API int inference_start(const char* cam, const char* output) {
