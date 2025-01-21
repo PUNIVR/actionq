@@ -318,7 +318,7 @@ impl Session {
                                         self.pose.inference_start().await;
                                         self.ui.exercise_show(session.current_exercise_name()).await;
                                     },
-                                    _ => unreachable!()
+                                    _ => {}
                                 }
 
                             }
