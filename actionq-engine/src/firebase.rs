@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_imports)]
+
 use firestore::{FirestoreListenEvent, FirestoreDb, FirestoreMemListenStateStorage, FirestoreListenerTarget, paths};
 use tokio::sync::mpsc::{Sender, Receiver};
 

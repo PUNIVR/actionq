@@ -1,4 +1,4 @@
-use eframe::egui;
+/* use eframe::egui;
 use egui::{FontId, RichText, Ui};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -86,7 +86,7 @@ impl eframe::App for MyApp {
                         self.display_videopose_stream(ui);
                     } else {
                         ui.add(
-                            egui::Image::new(egui::include_image!("/home/nvidia/Repositories/actionq-core/actionq-videopose/images/image1.png"))
+                            egui::Image::new(egui::include_image!("./actionq-videopose/images/image1.png"))
                                 .rounding(5.0)
                         );
                     }
@@ -96,7 +96,7 @@ impl eframe::App for MyApp {
                 cols[1].vertical_centered(|ui| {
                     ui.heading("Reference Exercise");
                     ui.add(
-                        egui::Image::new(egui::include_image!("/home/nvidia/Repositories/actionq-core/actionq-videopose/images/image2.png"))
+                        egui::Image::new(egui::include_image!("./actionq-videopose/images/image2.png"))
                             .rounding(5.0)
                     );
                 });
@@ -122,4 +122,6 @@ fn main() -> Result<()> {
     )?;
 
     Ok(())
-}
+} */
+
+fn main() {}

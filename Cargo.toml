@@ -1,5 +1,10 @@
 [workspace]
-members = ["actionq-engine", "actionq-motion", "actionq-videopose"]
+members = [
+    "actionq-engine", 
+    "actionq-motion", 
+    "actionq-videopose",
+    "actionq-common"
+]
 resolver = "2"
 
 [build]

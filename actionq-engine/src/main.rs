@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_imports)]
+
 use tokio;
 use tracing_subscriber::EnvFilter;
 use std::io::Read;
@@ -8,7 +10,6 @@ mod session;
 mod ui;
 mod firebase;
 mod common;
-mod exercise;
 
 use firebase::FirebaseProxy;
 

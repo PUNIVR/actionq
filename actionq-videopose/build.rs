@@ -1,8 +1,3 @@
-use std::env;
-use std::fs;
-use std::io;
-use std::path::{Path, PathBuf};
-use std::process::Command;
 
 fn dynlink_jetson_libs() {
     println!("cargo:rustc-link-lib=dylib=jetson-inference");

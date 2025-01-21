@@ -1,15 +1,14 @@
+#![allow(dead_code)]
+
 use std::time::{Duration, Instant};
 use webp_animation::prelude::*;
 use eframe::{egui, App, NativeOptions};
 use egui::{Button, Rect, TextureOptions, Ui};
 use tokio::sync::mpsc::{Sender, Receiver};
 
-use videopose::Framebuffer;
+use videopose::{FrameData, Framebuffer};
 use motion::{
-    Warning, 
-    Event, 
-    ProgresState, 
-    StateId
+    StateEvent, StateOutput, StateWarning
 };
 
 #[derive(Debug)]
@@ -18,8 +17,8 @@ pub enum Command {
         exercise_id: String,
     },
     Update {
-        progress: ProgresState,
-        frame: Framebuffer,
+        state_output: Option<StateOutput>,
+        frame: FrameData,
     },
     ExerciseEnd
 }
@@ -32,8 +31,8 @@ impl UiProxy {
         self.0.send(Command::ExerciseStart { exercise_id } ).await.unwrap();
     }
     // Display framedata
-    pub async fn update(&self, progress: ProgresState, frame: Framebuffer) {
-        self.0.send(Command::Update{ progress, frame }).await.unwrap();
+    pub async fn update(&self, state_output: Option<StateOutput>, frame: FrameData) {
+        self.0.send(Command::Update{ state_output, frame }).await.unwrap();
     }
     // Stop showing exercise
     pub async fn exercise_stop(&self) {
@@ -185,17 +184,20 @@ impl App for MyUi {
                         last_time: Instant::now()
                     });
                 },
-                Command::Update { progress, frame } => {
+                Command::Update { state_output, frame } => {
                     tracing::trace!("display single frame");
 
-                    let frame = egui::ColorImage::from_rgb([frame.size.0 as usize, frame.size.1 as usize], &frame.storage);
+                    let frame_size = frame.framebuffer.size;
+                    let frame = egui::ColorImage::from_rgb([frame_size.0 as usize, frame_size.1 as usize], &frame.framebuffer.storage);
                     self.current_frame = Some(frame);
 
                     // Increase repetition count if necessary
-                    for event in &progress.events {
-                        match event {
-                            Event::RepetitionComplete => self.repetition_count += 1,
-                            _ => { }
+                    if let Some(state) = state_output {
+                        for event in &state.metadata.events {
+                            match event {
+                                StateEvent::Repetition => self.repetition_count += 1,
+                                _ => { }
+                            }
                         }
                     }
                 },
