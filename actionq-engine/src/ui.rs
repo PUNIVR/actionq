@@ -168,7 +168,7 @@ impl App for MyUi {
                     tracing::trace!("start exercise display");
                     
                     // Load the gif
-                    let exercise_data = std::fs::read(&format!("/home/nvidia/Repositories/actionq-core/exercises/{}.webp", exercise_id)).unwrap();
+                    let exercise_data = std::fs::read(&format!("/home/nvidia/Repositories/actionq/exercises/{}.webp", exercise_id)).unwrap();
                     let exercise_frames = webp_animation::Decoder::new(&exercise_data).unwrap();
                     let exercise_frames: Vec<egui::ColorImage> = exercise_frames.into_iter()
                         .map(|f| { 
