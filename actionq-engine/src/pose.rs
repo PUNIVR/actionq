@@ -50,9 +50,9 @@ impl Pose {
         let (data_sender, data_receiver) = mpsc::channel(100);
 
         videopose::create_hpe_engine(
-            "/home/nvidia/Repositories/actionq-core/network/pose_resnet18_body.onnx",
-            "/home/nvidia/Repositories/actionq-core/network/human_pose.json",
-            "/home/nvidia/Repositories/actionq-core/network/colors.txt"
+            "/home/nvidia/Repositories/actionq/networks/pose_resnet18_body.onnx",
+            "/home/nvidia/Repositories/actionq/networks/human_pose.json",
+            "/home/nvidia/Repositories/actionq/networks/colors.txt"
         ).unwrap();
 
         (

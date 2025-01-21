@@ -38,9 +38,9 @@ mod cpp {
     #[link(name = "videopose")]
     extern "C" {
         /// Create TRT engine, load network
-        pub fn initialize(network: *const i8, pose: *const i8, colors: *const i8) -> i32;
+        pub fn initialize(network: *const u8, pose: *const u8, colors: *const u8) -> i32;
         /// Start gstreamer video pipeline
-        pub fn inference_start(camera: *const i8, output: *const i8) -> i32;
+        pub fn inference_start(camera: *const u8, output: *const u8) -> i32;
          /// Process a single frame
         pub fn inference_step() -> CppFrameData;
         /// Stop gstreamer video pipeline
