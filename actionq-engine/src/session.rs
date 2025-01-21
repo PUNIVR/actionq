@@ -74,7 +74,7 @@ struct SessionState {
 impl SessionState {
     /// Process a frame, returns the following:
     /// - exercise_is_complete, session_is_complete, StateOutput
-    pub fn process(&mut self, skeleton: &Skeleton) -> (bool, bool, StateOutput) {
+    pub fn process(&mut self, skeleton: &Skeleton) -> (bool, bool, Option<StateOutput>) {
 
         let exercise = &mut self.exercises[self.current_idx];
         let (finished, output) = exercise.process(&skeleton)
@@ -302,7 +302,7 @@ impl Session {
                                 let (finished, completed, output) = session.process(&skeleton);
                                 tracing::trace!("{}, {}, {:?}", finished, completed, output);
                                 
-                                progress = Some(output);
+                                progress = output;
                                 match (finished, completed) {
                                     // Close session
                                     (true, true) => {

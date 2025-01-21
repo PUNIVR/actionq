@@ -21,6 +21,9 @@ pub struct LuaExercise {
     /// Current number of repetitions done
     pub repetitions: u32,
 
+    /// What are the required joints to observe for this script
+    required_joints: Vec<String>,
+
     /// All invokable functions from the engine, 
     /// includes "setup", "load" and all functions defined in the STATES global variable 
     functions: HashMap<String, LuaFunction>,
@@ -269,11 +272,15 @@ impl LuaExercise {
         functions.insert("setup".to_string(), globals.get::<LuaFunction>("setup")?);
         functions.insert("entry".to_string(), globals.get::<LuaFunction>("entry")?);
 
+        // Obtain required joints
+        let required_joints = globals.get::<Vec<String>>("JOINTS")?;
+
         Ok(Self {
             ctx, 
             name,
             description,
             repetitions_target, 
+            required_joints,
             current_state: "entry".to_string(),
             accumulated_warnings: HashMap::new(),
             frames: vec![],
@@ -318,11 +325,16 @@ impl LuaExercise {
         self.frames.push((skeleton.clone(), output.clone()));
     }
 
-    /// Handle a skeleton from the HPE, returns true when the exercise is complete
-    pub fn process(&mut self, skeleton: &Skeleton) -> LuaResult<(bool, StateOutput)> {
+    /// Handle a skeleton from the HPE, returns true when the exercise is complete and state output if the exercise did run.
+    pub fn process(&mut self, skeleton: &Skeleton) -> LuaResult<(bool, Option<StateOutput>)> {
         let state_fn = self.functions.get(&self.current_state)
             .expect("Invalid current state!");
     
+        // If any required joint is missing from the frame skeleton, skip processing
+        if self.required_joints.iter().any(|j| !skeleton.contains_key(j)) {
+            return Ok((false, None));
+        }
+
         // Evaluate current frame
         let lua_skeleton = self.convert_skeleton(skeleton);
         let output = state_fn.call::<StateOutput>(lua_skeleton)?;
@@ -333,7 +345,7 @@ impl LuaExercise {
         self.update_warnings(&output);
 
         let completed = self.repetitions >= self.repetitions_target;
-        Ok((completed, output))
+        Ok((completed, Some(output)))
     }
 
 }
