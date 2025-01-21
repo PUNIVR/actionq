@@ -4,7 +4,6 @@ use tokio;
 use tracing_subscriber::EnvFilter;
 use std::io::Read;
 
-//mod network;
 mod pose;
 mod session;
 mod ui;

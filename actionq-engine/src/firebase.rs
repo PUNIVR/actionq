@@ -175,7 +175,9 @@ pub async fn listen_commands(patient_id: &str, database_id: &str, session: Sessi
     while let Some(cmd) = cmds.recv().await {
         match cmd {
             FirebaseCommand::GetExerciseDefinition { respond_to, exercise_id } => {
-                respond_to.send(firestore.get_exercise(&exercise_id).await)
+                let exercise = firestore.get_exercise(&exercise_id).await;
+                tracing::trace!("retreived exercise: {:?}", exercise);
+                respond_to.send(exercise)
                     .expect("unable to respond");            
             }
         }
