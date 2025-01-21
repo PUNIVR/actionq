@@ -12,7 +12,7 @@ use crate::common::RequestExerciseReps;
 use crate::firebase::FirebaseProxy;
 use crate::ui::UiProxy;
 
-use videopose::{FrameData, Framebuffer};
+use videopose::{FrameData, Framebuffer, SKELETON_COCO_JOINTS};
 use motion::{LuaExercise, StateOutput, StateEvent, StateWarning, Skeleton};
 
 pub enum Command {
@@ -27,10 +27,10 @@ pub enum Command {
 }
 
 /// Creates a Skeleton from FrameData and a joint mapping
-pub fn framedata_to_skeleton(data: &FrameData, joints: &[String]) -> Skeleton {
+pub fn framedata_to_skeleton(data: &FrameData, joints: &[&str]) -> Skeleton {
     let mut result = HashMap::<String, Vec2>::new();
     for (i, joint) in joints.iter().enumerate() {
-        result.insert(joint.clone(), data.keypoints[i]);
+        result.insert(String::from(*joint), data.keypoints[i]);
     }
     result
 }
@@ -298,7 +298,7 @@ impl Session {
                             if session.running {
                                 tracing::trace!("running exercise analyzer");
 
-                                let skeleton = framedata_to_skeleton(&pose_prepose, &[]);
+                                let skeleton = framedata_to_skeleton(&pose_prepose, SKELETON_COCO_JOINTS);
                                 let (finished, completed, output) = session.process(&skeleton);
                                 tracing::trace!("{}, {}, {:?}", finished, completed, output);
                                 

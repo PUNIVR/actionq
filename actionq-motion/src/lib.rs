@@ -332,6 +332,9 @@ impl LuaExercise {
     
         // If any required joint is missing from the frame skeleton, skip processing
         if self.required_joints.iter().any(|j| !skeleton.contains_key(j)) {
+            let missing: Vec<String> = self.required_joints.iter().cloned().filter(|j| !skeleton.contains_key(j)).collect();
+            let available: Vec<String> = skeleton.keys().into_iter().cloned().collect();
+            println!("missing: {:?}, available: {:?}", missing, available);
             return Ok((false, None));
         }
 
