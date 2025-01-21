@@ -82,7 +82,7 @@ impl SessionState {
 
         let mut completed = false;
         if finished {
-            if self.current_idx < self.exercises.len() {
+            if self.current_idx < self.exercises.len() - 1 {
                 self.current_idx += 1;
             } else {
                 completed = true;
@@ -300,7 +300,8 @@ impl Session {
 
                                 let skeleton = framedata_to_skeleton(&pose_prepose, SKELETON_COCO_JOINTS);
                                 let (finished, completed, output) = session.process(&skeleton);
-                                tracing::trace!("{}, {}, {:?}", finished, completed, output);
+                                // tracing::info!("{}, {}, {}, {:?}", 
+                                //     finished, completed, session.current_exercise_name(), output);
                                 
                                 progress = output;
                                 match (finished, completed) {

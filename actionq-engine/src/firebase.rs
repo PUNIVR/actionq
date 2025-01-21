@@ -16,7 +16,7 @@ mod model {
     pub struct Exercise {
         pub name: String,
         pub description: String,
-        pub video_filepath: String,
+        pub gif: String,
         pub fsm: String
     }
 
