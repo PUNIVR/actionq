@@ -30,7 +30,12 @@ pub enum Command {
 pub fn framedata_to_skeleton(data: &FrameData, joints: &[&str]) -> Skeleton {
     let mut result = HashMap::<String, Vec2>::new();
     for (i, joint) in joints.iter().enumerate() {
-        result.insert(String::from(*joint), data.keypoints[i]);
+        
+        // Skip all joint at position (0.0, 0.0) as they are not available
+        let coords = data.keypoints[i];
+        if coords.x != 0.0 && coords.y != 0.0 {
+            result.insert(String::from(*joint), data.keypoints[i]);
+        }
     }
     result
 }
@@ -95,6 +100,12 @@ impl SessionState {
     /// Get current exercise name
     pub fn current_exercise_name(&self) -> String {
         self.exercises[self.current_idx].name.clone()
+    }
+
+    /// get current exercise
+    pub fn current_repetitions(&self) -> (u32, u32) {
+        let ex = &self.exercises[self.current_idx];
+        (ex.repetitions_target, ex.repetitions)
     }
 
 }
@@ -300,9 +311,11 @@ impl Session {
 
                                 let skeleton = framedata_to_skeleton(&pose_prepose, SKELETON_COCO_JOINTS);
                                 let (finished, completed, output) = session.process(&skeleton);
-                                // tracing::info!("{}, {}, {}, {:?}", 
-                                //     finished, completed, session.current_exercise_name(), output);
-                                
+                                let (repetitions_target, repetitions) = session.current_repetitions();
+
+                                // Send progress to UI
+                                self.ui.update(progress, repetitions_target, repetitions, pose_prepose).await;
+
                                 progress = output;
                                 match (finished, completed) {
                                     // Close session
@@ -324,8 +337,6 @@ impl Session {
 
                             }
 
-                                // Send progress to UI
-                                self.ui.update(progress, pose_prepose).await;
                         }
                     }
                 }

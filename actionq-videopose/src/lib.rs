@@ -135,15 +135,18 @@ impl From<CppFrameData> for Option<FrameData> {
                     buffer_size);
             }
 
+            let mut keypoints = vec![Vec2::new(0.0, 0.0); 18];
+            for kp in &item.keypoints {
+                keypoints[kp.id as usize] = Vec2::new(kp.x, kp.y);
+            }
+
             return Some(FrameData {
                 framebuffer: Framebuffer { 
                     storage: buffer, 
                     size: (1280, 720) 
                 },
                 subjects: item.subjects,
-                keypoints: item.keypoints.iter()
-                    .map(|k| k.clone().into())
-                    .collect(),
+                keypoints
             });
         }
         None

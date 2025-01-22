@@ -234,6 +234,16 @@ impl LuaExercise {
             })?
         )?;
 
+        // Angle compared to a reference axix
+        ctx.globals().set("inner_angle_aligned_axis",
+            ctx.create_function(|_, (axis, a, b): (LuaVec2, LuaVec2, LuaVec2)| {
+                let axis = axis.0;
+                let d = b.0 - a.0;
+                let k = axis.dot(d)/(axis.length()*d.length());
+                Ok(k.acos().to_degrees())
+            })?
+        )?;
+
         // Near values by a margin
         ctx.globals().set("near",
             ctx.create_function(|_, (target, margin, value): (f32, f32, f32)| {

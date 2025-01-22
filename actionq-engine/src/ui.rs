@@ -8,7 +8,7 @@ use tokio::sync::mpsc::{Sender, Receiver};
 
 use videopose::{FrameData, Framebuffer};
 use motion::{
-    StateEvent, StateOutput, StateWarning
+    StateEvent, StateOutput, StateWarning, LuaExercise
 };
 
 #[derive(Debug)]
@@ -18,6 +18,8 @@ pub enum Command {
     },
     Update {
         state_output: Option<StateOutput>,
+        repetitions_target: u32,
+        repetitions: u32,
         frame: FrameData,
     },
     ExerciseEnd
@@ -31,8 +33,8 @@ impl UiProxy {
         self.0.send(Command::ExerciseStart { exercise_id } ).await.unwrap();
     }
     // Display framedata
-    pub async fn update(&self, state_output: Option<StateOutput>, frame: FrameData) {
-        self.0.send(Command::Update{ state_output, frame }).await.unwrap();
+    pub async fn update(&self, state_output: Option<StateOutput>, repetitions_target: u32, repetitions: u32, frame: FrameData) {
+        self.0.send(Command::Update{ state_output, repetitions_target, repetitions, frame }).await.unwrap();
     }
     // Stop showing exercise
     pub async fn exercise_stop(&self) {
@@ -184,7 +186,7 @@ impl App for MyUi {
                         last_time: Instant::now()
                     });
                 },
-                Command::Update { state_output, frame } => {
+                Command::Update { state_output, repetitions_target, repetitions, frame } => {
                     tracing::trace!("display single frame");
 
                     let frame_size = frame.framebuffer.size;
@@ -192,14 +194,8 @@ impl App for MyUi {
                     self.current_frame = Some(frame);
 
                     // Increase repetition count if necessary
-                    if let Some(state) = state_output {
-                        for event in &state.metadata.events {
-                            match event {
-                                StateEvent::Repetition => self.repetition_count += 1,
-                                _ => { }
-                            }
-                        }
-                    }
+                    self.repetition_count = repetitions;
+
                 },
                 Command::ExerciseEnd => {
                     tracing::trace!("stop exercise display");
