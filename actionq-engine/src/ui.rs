@@ -3,12 +3,12 @@
 use std::time::{Duration, Instant};
 use webp_animation::prelude::*;
 use eframe::{egui, App, NativeOptions};
-use egui::{Button, Rect, TextureOptions, Ui};
+use egui::{Button, Rect, TextureOptions, Ui, Color32, Stroke, Pos2};
 use tokio::sync::mpsc::{Sender, Receiver};
 
 use videopose::{FrameData, Framebuffer};
 use motion::{
-    StateEvent, StateOutput, StateWarning, LuaExercise
+    StateEvent, StateOutput, StateWarning, LuaExercise, Widget
 };
 
 #[derive(Debug)]
@@ -85,6 +85,10 @@ impl ExerciseGif {
 struct MyUi {
     is_running: bool,
     repetition_count: u32,
+    help_text: Option<String>,
+
+    // Widgets to render on top of the video stream
+    widgets: Vec<Widget>,
 
     exercise_gif: Option<ExerciseGif>,
     current_frame: Option<egui::ColorImage>,
@@ -113,7 +117,7 @@ impl MyUi {
             if let Some(frame) = &self.current_frame {
                 // FIXME: cache this texture, this allocates a new one at each render
                 let texture: egui::TextureHandle = ui.ctx().load_texture("stream-tex", frame.clone(), Default::default());
-                ui.add(
+                let frame = ui.add(
                     egui::Image::from_texture(&texture)
                         .maintain_aspect_ratio(true)
                         .fit_to_fraction([0.9, 0.9].into())
@@ -121,9 +125,38 @@ impl MyUi {
                 );
                 ui.add_space(5.0);
 
+                // Render all widgets
+                let color = Color32::from_gray(255);
+                for widget in &self.widgets {
+                    match widget {
+                        Widget::Circle { position } => {
+
+                            // Transform position from stream coord to ui coords
+                            let stream_size = texture.size_vec2();
+                            let position = Pos2::new(
+                                frame.rect.left_top().x + position.x / stream_size.x * frame.rect.width(),
+                                frame.rect.left_top().y + position.y / stream_size.y * frame.rect.height()
+                            );
+
+                            ui.painter().circle(
+                                position,
+                                15.0,
+                                color,
+                                Stroke::new(10.0, color)
+                            );
+                        }
+                    }
+                }
+
                 // Label for repetitions
                 ui.add_sized([400.0, 100.0], 
                     egui::Label::new(&format!("RIPETIZIONI: {}", self.repetition_count)));
+
+                // Help text
+                if let Some(help_text) = &self.help_text {
+                    println!("ui render help text: {:?}", help_text);
+                    ui.heading(&format!("[!] {} [!]", help_text));
+                }
             }
         });
     }
@@ -195,7 +228,19 @@ impl App for MyUi {
 
                     // Increase repetition count if necessary
                     self.repetition_count = repetitions;
+               
+                    println!("ui: {:?}", state_output);
+                    if let Some(output) = state_output {
 
+                        // Widgets
+                        self.widgets = output.metadata.widgets.clone();
+
+                        // Help text
+                        if let Some(help_text) = output.metadata.help {
+                            println!("ui help text: {}", help_text);
+                            self.help_text = Some(help_text)
+                        }
+                    }
                 },
                 Command::ExerciseEnd => {
                     tracing::trace!("stop exercise display");
@@ -204,6 +249,8 @@ impl App for MyUi {
                     self.exercise_gif = None;
                     self.current_frame = None;
                     self.repetition_count = 0;
+                    self.help_text = None;
+                    self.widgets = vec![];
                 },
                 _ => {}
             }
@@ -240,6 +287,8 @@ pub fn run_ui_blocking(rx: Receiver<Command>) {
                 cmds: rx,
                 exercise_gif: None,
                 current_frame: None,
+                widgets: vec![],
+                help_text: None
             }))
         }),
     ).expect("Unable to run eframe");

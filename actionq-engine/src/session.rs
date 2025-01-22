@@ -302,7 +302,6 @@ impl Session {
                     // Analyze only if there is a subject
                     if let Some(pose_prepose) = pose_data {
                         if pose_prepose.subjects != 0 {
-                            let mut progress = None;
 
                             // If the pose estimator is running then we must have a current session!
                             let session = self.session.as_mut().expect("");
@@ -313,10 +312,10 @@ impl Session {
                                 let (finished, completed, output) = session.process(&skeleton);
                                 let (repetitions_target, repetitions) = session.current_repetitions();
 
-                                // Send progress to UI
-                                self.ui.update(progress, repetitions_target, repetitions, pose_prepose).await;
+                                //println!("{:?}", output);
 
-                                progress = output;
+                                // Send progress to UI
+                                self.ui.update(output, repetitions_target, repetitions, pose_prepose).await;
                                 match (finished, completed) {
                                     // Close session
                                     (true, true) => {
