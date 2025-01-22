@@ -44,7 +44,12 @@ pub struct LuaExercise {
 pub enum Widget {
     /// Small circle
     Circle {
-        position: Vec2
+        /// What text to show near or inside the circle
+        text: Option<String>,
+        /// At what offset from the position the text should be rendered
+        text_offset: Vec2,
+        /// At what position of the screen the circle should be rendered
+        position: Vec2,
     }
 }
 
@@ -106,9 +111,20 @@ impl FromLua for Widget {
             let widget_type: String = t.get("widget")?;
             return Ok(match widget_type.as_str() {
                 "circle" => {
+
+                    // From LuaVec2 to Vec2 with optionally None
                     let position: LuaVec2 = t.get("position")?;
+                    
+                    // BUG: this is Nil
+                    //let text_offset: LuaVec2 = t.get("text_offset")
+                    //    .unwrap_or(LuaVec2(Vec2::new(0.0, 0.0)));
+
+                    let text_offset = Vec2::new(0.0, 0.0);
+
                     Widget::Circle {
-                        position: position.0 // From LuaVec2 to Vec2...
+                        position: position.0,
+                        text_offset: text_offset,
+                        text: t.get("text").ok(),
                     }
                 },
                 _ => unimplemented!()
@@ -198,6 +214,13 @@ impl Into<LuaVec2> for Vec2 {
     }
 }
 
+/// Convert a LuaVec2 into a Vec2
+impl Into<Vec2> for LuaVec2 {
+    fn into(self) -> Vec2 {
+        self.0
+    }
+}
+
 /// Convert LuaVec2 to Lua table
 impl IntoLua for LuaVec2 {
     fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
@@ -211,6 +234,7 @@ impl IntoLua for LuaVec2 {
 /// Convert Lua table into a LuaVec2
 impl FromLua for LuaVec2 {
     fn from_lua(value: LuaValue, _: &Lua) -> LuaResult<Self> {
+        println!("{:?}", value);
         if let LuaValue::Table(t) = value {
             return Ok(LuaVec2(Vec2::new(
                 t.get("x")?, t.get("y")?)))

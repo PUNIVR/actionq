@@ -3,7 +3,7 @@
 use std::time::{Duration, Instant};
 use webp_animation::prelude::*;
 use eframe::{egui, App, NativeOptions};
-use egui::{Button, Rect, TextureOptions, Ui, Color32, Stroke, Pos2};
+use egui::{Button, Rect, TextureOptions, Ui, Align2, Color32, Stroke, Pos2, FontId, FontFamily};
 use tokio::sync::mpsc::{Sender, Receiver};
 
 use videopose::{FrameData, Framebuffer};
@@ -129,7 +129,7 @@ impl MyUi {
                 let color = Color32::from_gray(255);
                 for widget in &self.widgets {
                     match widget {
-                        Widget::Circle { position } => {
+                        Widget::Circle { position, text, text_offset } => {
 
                             // Transform position from stream coord to ui coords
                             let stream_size = texture.size_vec2();
@@ -138,12 +138,28 @@ impl MyUi {
                                 frame.rect.left_top().y + position.y / stream_size.y * frame.rect.height()
                             );
 
-                            ui.painter().circle(
+                            ui.painter().circle_filled(
                                 position,
                                 15.0,
-                                color,
-                                Stroke::new(10.0, color)
+                                color
                             );
+
+                            // Optionally render text near the circle
+                            if let Some(text) = text {
+                                ui.painter().text(
+                                    Pos2::new(
+                                        position.x + text_offset.x,
+                                        position.y + text_offset.y
+                                    ), 
+                                    Align2::CENTER_CENTER,
+                                    text,
+                                    FontId::new(
+                                        15.0, 
+                                        FontFamily::Monospace
+                                    ),
+                                    Color32::from_gray(0),
+                                );
+                            }
                         }
                     }
                 }
