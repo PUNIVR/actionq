@@ -2,15 +2,18 @@
 
 use firestore::{FirestoreListenEvent, FirestoreDb, FirestoreMemListenStateStorage, FirestoreListenerTarget, paths};
 use tokio::sync::mpsc::{Sender, Receiver};
+use uuid::Uuid;
 
 use crate::session::SessionProxy;
 use crate::common::{Request, RequestExerciseReps};
 
 /// Data definitions inside of firebase
-mod model {
+/// we use TitleCase
+pub mod model {
     use serde::{Serialize, Deserialize};
     use crate::common::{Request, RequestExerciseReps};
-
+    use std::collections::HashMap;
+    
     /// Exercise definition
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Exercise {
@@ -28,6 +31,26 @@ mod model {
     pub struct JetsonInterface {
         pub state: JetsonState,
         pub request: Option<Request>
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct FramePose {
+        pub Keypoints: HashMap<String, (f32, f32)>,
+        pub FrameId: usize,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct SessionExercise {
+        pub Exercise: String,
+        pub ExerciseTimestamp: String,
+        pub NumRepetitionsDone: u32,
+        pub Poses: Vec<FramePose>
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct Session {
+        pub Exercises: Vec<SessionExercise>,
+        pub Timestamp: String
     }
 }
 
@@ -67,6 +90,19 @@ impl Firestore {
             .execute::<model::JetsonInterface>()
             .await.unwrap();
     }
+
+    /// Stora a new session for the patient
+    pub async fn store_session(&self, session: model::Session) {
+        let id = format!("{}", Uuid::new_v4());
+        let parent_path = self.db.parent_path("patients", self.patient_id.clone()).unwrap();
+        let _: model::Session = self.db.fluent().insert()
+            .into("exercise_sessions")
+            .document_id(&id)
+            .parent(&parent_path)
+            .object(&session)
+            .execute()
+            .await.unwrap();
+    }
 }
 
 /// All accepted commands for Firebase
@@ -76,6 +112,9 @@ pub enum FirebaseCommand {
         respond_to: tokio::sync::oneshot::Sender<Option<model::Exercise>>,
         /// Id of the requested exercise
         exercise_id: String
+    },
+    StoreSession {
+        session: model::Session 
     }
 }
 
@@ -88,6 +127,11 @@ impl FirebaseProxy {
             respond_to: tx, exercise_id: exercise_id.to_owned()
         }).await.unwrap();
         rx.await.unwrap()
+    }
+
+    pub async fn store_session(&self, session: model::Session) {
+        self.0.send(FirebaseCommand::StoreSession { session }).await
+            .unwrap();
     }
 }
 
@@ -179,6 +223,10 @@ pub async fn listen_commands(patient_id: &str, database_id: &str, session: Sessi
                 tracing::trace!("retreived exercise: {:?}", exercise);
                 respond_to.send(exercise)
                     .expect("unable to respond");            
+            },
+            FirebaseCommand::StoreSession { session } => {
+               firestore.store_session(session).await; 
+                tracing::trace!("stored session");
             }
         }
     }

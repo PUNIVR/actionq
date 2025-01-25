@@ -11,6 +11,7 @@ use crate::pose::{PoseEventSender, PoseEventSink, PoseProxy};
 use crate::common::RequestExerciseReps;
 use crate::firebase::FirebaseProxy;
 use crate::ui::UiProxy;
+use crate::firebase::model;
 
 use videopose::{FrameData, Framebuffer, SKELETON_COCO_JOINTS};
 use motion::{LuaExercise, StateOutput, StateEvent, StateWarning, Skeleton};
@@ -108,6 +109,38 @@ impl SessionState {
         (ex.repetitions_target, ex.repetitions)
     }
 
+}
+
+/// Convert a LuaExercise into a Firestore SessionExercise
+impl From<&LuaExercise> for model::SessionExercise {
+    fn from(other: &LuaExercise) -> Self {
+        Self {
+            Exercise: other.name.clone(),
+            ExerciseTimestamp: String::new(),
+            NumRepetitionsDone: other.repetitions,
+            Poses: other.frames.iter().enumerate()
+                .map(|(i, (sk, _))| {
+                    model::FramePose {
+                        FrameId: i,
+                        Keypoints: sk.iter()
+                            .map(|(k, v)| (k.clone(), (v.x, v.y)))
+                            .collect()
+                    }
+                }).collect()
+        }
+    }
+}
+
+/// Convert a SessionState to a Firestore Session
+impl From<&SessionState> for model::Session {
+    fn from(other: &SessionState) -> Self {
+        Self {
+            Timestamp: String::new(),
+            Exercises: other.exercises.iter()
+                .map(model::SessionExercise::from)
+                .collect()
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -251,21 +284,20 @@ impl Session {
 
     #[tracing::instrument(skip_all)]
     async fn session_end(&mut self) {
-        // There is not session to end!
-        if let None = self.session {
-            tracing::warn!("invalid state for session end");
+        if let Some(session) = &self.session {
+
+            // Notify other actors to stop
+            self.pose.inference_end().await;
+            self.ui.exercise_stop().await;
+            self.ignore_frames = true;
+
+            // Save to database
+            self.firebase.store_session(model::Session::from(session)).await;
+
+            self.session = None;
+            tracing::info!("session ended");   
             return;
         }
-
-        // Notify other actors to stop
-        self.pose.inference_end().await;
-        self.ui.exercise_stop().await;
-        self.ignore_frames = true;
-
-        // TODO: save to database
-        // for now simulate a drop of the current session
-        self.session = None;
-        tracing::info!("session ended");
     }
 
     #[tracing::instrument(skip_all, fields(cmd))]
@@ -321,6 +353,10 @@ impl Session {
                                     (true, true) => {
                                         tracing::info!("session completed");
                                         self.session_end().await;
+
+                                        // Save session to database
+                                        //self.firebase.store_session(
+                                        //    model::Session::from(session));
                                     },
                                     // Next exercise
                                     (true, false) => {

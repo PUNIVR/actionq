@@ -35,7 +35,7 @@ pub struct LuaExercise {
     accumulated_warnings: HashMap<String, u32>,
 
     /// Processed frames, with skeleton and state output
-    frames: Vec<(Skeleton, StateOutput)>
+    pub frames: Vec<(Skeleton, StateOutput)>
 }
 
 /// Custom widget to draw on screen over the video stream.
