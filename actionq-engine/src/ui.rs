@@ -3,7 +3,7 @@
 use std::time::{Duration, Instant};
 use webp_animation::prelude::*;
 use eframe::{egui, App, NativeOptions};
-use egui::{Button, Rect, TextureOptions, Ui, Align2, Color32, Stroke, Pos2, FontId, FontFamily};
+use egui::{Button, Rect, TextureOptions, Ui, Rangef, Align2, Color32, Stroke, Pos2, FontId, FontFamily};
 use tokio::sync::mpsc::{Sender, Receiver};
 
 use videopose::{FrameData, Framebuffer};
@@ -160,6 +160,22 @@ impl MyUi {
                                     Color32::from_gray(0),
                                 );
                             }
+                        },
+                        Widget::HLine { y } => {
+                            // Transform position from stream coord to ui coords
+                            let stream_size = texture.size_vec2();
+                            let y = frame.rect.left_top().y + y / stream_size.y * frame.rect.height();
+                            ui.painter().hline(Rangef::new(frame.rect.left(), frame.rect.right()), 
+                                               y, 
+                                               Stroke::new(1.0, color));
+                        }
+                        Widget::VLine { x } => {
+                            // Transform position from stream coord to ui coords
+                            let stream_size = texture.size_vec2();
+                            let x = frame.rect.left_top().x + x / stream_size.x * frame.rect.height();
+                            ui.painter().vline(x, 
+                                               Rangef::new(frame.rect.top(), frame.rect.bottom()), 
+                                               Stroke::new(1.0, color));
                         }
                     }
                 }
@@ -170,7 +186,7 @@ impl MyUi {
 
                 // Help text
                 if let Some(help_text) = &self.help_text {
-                    println!("ui render help text: {:?}", help_text);
+                    // println!("ui render help text: {:?}", help_text);
                     ui.heading(&format!("[!] {} [!]", help_text));
                 }
             }
@@ -245,7 +261,7 @@ impl App for MyUi {
                     // Increase repetition count if necessary
                     self.repetition_count = repetitions;
                
-                    println!("ui: {:?}", state_output);
+                    //println!("ui: {:?}", state_output);
                     if let Some(output) = state_output {
 
                         // Widgets
