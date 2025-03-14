@@ -51,6 +51,13 @@ pub enum Widget {
         /// At what position of the screen the circle should be rendered
         position: Vec2,
     },
+    /// Line segment from A to B
+    Segment {
+        /// At what position of the screen the segment starts
+        from: Vec2,
+        /// At what position of the screen the segment ends
+        to: Vec2
+    },
     /// Vertical line
     VLine { x: f32 },
     /// Horizontal line
@@ -129,6 +136,16 @@ impl FromLua for Widget {
                         position: position.0,
                         text_offset: text_offset,
                         text: t.get("text").ok(),
+                    }
+                },
+                "segment" => {
+                    
+                    let from: LuaVec2 = t.get("from")?;
+                    let to: LuaVec2 = t.get("to")?;
+                    
+                    Widget::Segment { 
+                        from: from.0, 
+                        to: to.0 
                     }
                 },
                 "hline" => Widget::HLine { y: t.get("y")? },

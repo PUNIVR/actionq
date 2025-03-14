@@ -161,6 +161,22 @@ impl MyUi {
                                 );
                             }
                         },
+                        Widget::Segment { from, to } => {
+
+                            // Transform position from stream coord to ui coords
+                            let stream_size = texture.size_vec2();
+                            let from = Pos2::new(
+                                frame.rect.left_top().x + from.x / stream_size.x * frame.rect.width(),
+                                frame.rect.left_top().y + from.y / stream_size.y * frame.rect.height()
+                            );
+                            let to = Pos2::new(
+                                frame.rect.left_top().x + to.x / stream_size.x * frame.rect.width(),
+                                frame.rect.left_top().y + to.y / stream_size.y * frame.rect.height()
+                            );
+
+                            ui.painter().line_segment([from, to],
+                                                      Stroke::new(1.0, color));
+                        },
                         Widget::HLine { y } => {
                             // Transform position from stream coord to ui coords
                             let stream_size = texture.size_vec2();
