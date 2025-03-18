@@ -188,7 +188,7 @@ impl MyUi {
                         Widget::VLine { x } => {
                             // Transform position from stream coord to ui coords
                             let stream_size = texture.size_vec2();
-                            let x = frame.rect.left_top().x + x / stream_size.x * frame.rect.height();
+                            let x = frame.rect.left_top().x + x / stream_size.x * frame.rect.width();
                             ui.painter().vline(x, 
                                                Rangef::new(frame.rect.top(), frame.rect.bottom()), 
                                                Stroke::new(1.0, color));
