@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ActionQ</title>
+</head>
+<body>
+    //<canvas id="videoCanvas" width="640" height="480"></canvas>
+    <script>
+        
+        console.log("CIAO");
+
+        const socket = new WebSocket("ws://127.0.0.1:8080");
+        const canvas = document.getElementById("videoCanvas");
+        const ctx = canvas.getContext("2d");
+
+        socket.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            console.log(msg);
+            
+            // Extract image
+            const byteArray = new Uint8Array(msg.frame); // Convert list to Uint8Array
+            const blob = new Blob([byteArray], { type: 'image/jpeg' }); // Create a Blob
+            const url = URL.createObjectURL(blob); // Create a URL from Blob
+
+            const img = new Image();
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                URL.revokeObjectURL(url); // Free memory
+            };
+            img.src = url;
+        };
+
+        socket.onopen = () => console.log("Connected to WebSocket server");
+        socket.onerror = (error) => console.error("WebSocket Error:", error);
+        socket.onclose = () => console.log("WebSocket Disconnected");
+
+    </script>
+</body>
+</html>

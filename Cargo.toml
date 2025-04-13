@@ -4,7 +4,7 @@ members = [
     "actionq-motion", 
     "actionq-videopose",
     "actionq-common"
-]
+, "actionq-mock"]
 resolver = "2"
 
 [build]

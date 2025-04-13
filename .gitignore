@@ -1,3 +1,7 @@
 networks/
 .vscode/
 target/
+
+Cargo.lock
+
+actionq-mock/models/
