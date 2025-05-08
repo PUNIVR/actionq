@@ -1,11 +1,14 @@
 [workspace]
 members = [
     "actionq-engine", 
-    "actionq-motion", 
-    "actionq-videopose",
-    "actionq-common"
-]
+    "actionq-motion",
+    "actionq-common", 
+    "actionq-zed"
+, "actionq-simple"]
 resolver = "2"
 
 [build]
 incremental = true
+
+[workspace.dependencies]
+glam = { version = "0.30.3", features = ["serde"] }

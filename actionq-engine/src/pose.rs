@@ -2,14 +2,15 @@ use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
-use videopose::*;
+use actionq_common::CaptureData;
+use actionq_zed::*;
 
 // Receiver for HPE data
 #[derive(Debug)]
-pub struct PoseEventSink(pub broadcast::Receiver<FrameData>);
+pub struct PoseEventSink(pub broadcast::Receiver<CaptureData>);
 // Send HPE data
 #[derive(Debug)]
-pub struct PoseEventSender(pub broadcast::Sender<FrameData>);
+pub struct PoseEventSender(pub broadcast::Sender<CaptureData>);
 
 pub enum Command {
     InferenceStart,
@@ -35,25 +36,22 @@ impl PoseProxy {
 #[derive(Debug)]
 struct Pose {
     cmd_receiver: mpsc::Receiver<Command>,
-    data_sender: mpsc::Sender<FrameData>,
+    data_sender: mpsc::Sender<CaptureData>,
     is_running: bool,
 }
 
 impl Pose {
 
     #[tracing::instrument]
-    pub fn instantiate() -> (Self, PoseProxy, mpsc::Receiver<FrameData>) {
+    pub fn instantiate() -> (Self, PoseProxy, mpsc::Receiver<CaptureData>) {
         
         // Channel for commands
         let (cmd_sender, cmd_receiver) = mpsc::channel(100);
         // Channel for data output
         let (data_sender, data_receiver) = mpsc::channel(100);
 
-        videopose::create_hpe_engine(
-            "/home/nvidia/Repositories/actionq/networks/pose_resnet18_body.onnx",
-            "/home/nvidia/Repositories/actionq/networks/human_pose.json",
-            "/home/nvidia/Repositories/actionq/networks/colors.txt"
-        ).unwrap();
+        actionq_zed::initialize();
+        println!("ZED ready");
 
         (
             Pose {
@@ -74,14 +72,12 @@ impl Pose {
             Command::InferenceStart => {
                 if !self.is_running {
                     tracing::info!("inference started");
-                    videopose::inference_start("/dev/video0", "webrtc://@:8554/output").unwrap();
                     self.is_running = true;
                 }
             }
             Command::InferenceStop => {
                 if self.is_running {
                     tracing::info!("inference ended");
-                    videopose::inference_stop();
                     self.is_running = false;
                 }
             }
@@ -95,10 +91,8 @@ impl Pose {
                 if self.is_running {
 
                     // Generate a pose estimation and output to channel
-                    let frame_data = videopose::inference_step().unwrap();
-                    if let Some(pose) = frame_data {
-                        self.data_sender.blocking_send(pose).unwrap();
-                    }
+                    let frame_data = actionq_zed::extract();
+                    self.data_sender.blocking_send(frame_data).unwrap();
 
                     // Try handle command
                     if let Ok(msg) = self.cmd_receiver.try_recv() {
@@ -116,7 +110,7 @@ impl Pose {
     }
 }
 
-pub fn run_human_pose_estimator() -> (PoseProxy, mpsc::Receiver<FrameData>) {
+pub fn run_human_pose_estimator() -> (PoseProxy, mpsc::Receiver<CaptureData>) {
     let (engine, proxy, pose_receiver) = Pose::instantiate();
     tokio::spawn(engine.run_pose_estimator());
     (proxy, pose_receiver)

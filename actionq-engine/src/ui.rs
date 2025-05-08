@@ -6,8 +6,8 @@ use eframe::{egui, App, NativeOptions};
 use egui::{Button, Rect, TextureOptions, Ui, Rangef, Align2, Color32, Stroke, Pos2, FontId, FontFamily};
 use tokio::sync::mpsc::{Sender, Receiver};
 
-use videopose::{FrameData, Framebuffer};
-use motion::{
+use actionq_common::{CaptureData, Skeleton2D};
+use actionq_motion::{
     StateEvent, StateOutput, StateWarning, LuaExercise, Widget
 };
 
@@ -20,7 +20,7 @@ pub enum Command {
         state_output: Option<StateOutput>,
         repetitions_target: u32,
         repetitions: u32,
-        frame: FrameData,
+        capture: CaptureData,
     },
     ExerciseEnd
 }
@@ -33,8 +33,8 @@ impl UiProxy {
         self.0.send(Command::ExerciseStart { exercise_id } ).await.unwrap();
     }
     // Display framedata
-    pub async fn update(&self, state_output: Option<StateOutput>, repetitions_target: u32, repetitions: u32, frame: FrameData) {
-        self.0.send(Command::Update{ state_output, repetitions_target, repetitions, frame }).await.unwrap();
+    pub async fn update(&self, state_output: Option<StateOutput>, repetitions_target: u32, repetitions: u32, capture: CaptureData) {
+        self.0.send(Command::Update{ state_output, repetitions_target, repetitions, capture }).await.unwrap();
     }
     // Stop showing exercise
     pub async fn exercise_stop(&self) {
@@ -89,6 +89,8 @@ struct MyUi {
 
     // Widgets to render on top of the video stream
     widgets: Vec<Widget>,
+    // Current skeleton
+    keypoints: Skeleton2D,
 
     exercise_gif: Option<ExerciseGif>,
     current_frame: Option<egui::ColorImage>,
@@ -115,6 +117,7 @@ impl MyUi {
 
             // Show video stream if available
             if let Some(frame) = &self.current_frame {
+
                 // FIXME: cache this texture, this allocates a new one at each render
                 let texture: egui::TextureHandle = ui.ctx().load_texture("stream-tex", frame.clone(), Default::default());
                 let frame = ui.add(
@@ -124,6 +127,27 @@ impl MyUi {
                         .rounding(10.0)
                 );
                 ui.add_space(5.0);
+
+                // Draw skeleton
+                for kp in &self.keypoints {
+
+                    // Transform position from stream coord to ui coords
+                    let stream_size = texture.size_vec2();
+                    let position = Pos2::new(
+                        frame.rect.left_top().x + kp.x / stream_size.x * frame.rect.width(),
+                        frame.rect.left_top().y + kp.y / stream_size.y * frame.rect.height()
+                    );
+
+                    // Draw only if inside the frame
+                    if kp.x >= 0.0 && kp.y >= 0.0 && kp.x <= stream_size.x && kp.y <= stream_size.y {
+                        let color = Color32::from_gray(255);
+                        ui.painter().circle_filled(
+                            position,
+                            5.0,
+                            color
+                        );
+                    }
+                }
 
                 // Render all widgets
                 let color = Color32::from_gray(255);
@@ -175,23 +199,23 @@ impl MyUi {
                             );
 
                             ui.painter().line_segment([from, to],
-                                                      Stroke::new(1.0, color));
+                                                        Stroke::new(1.0, color));
                         },
                         Widget::HLine { y } => {
                             // Transform position from stream coord to ui coords
                             let stream_size = texture.size_vec2();
                             let y = frame.rect.left_top().y + y / stream_size.y * frame.rect.height();
                             ui.painter().hline(Rangef::new(frame.rect.left(), frame.rect.right()), 
-                                               y, 
-                                               Stroke::new(1.0, color));
+                                                y, 
+                                                Stroke::new(1.0, color));
                         }
                         Widget::VLine { x } => {
                             // Transform position from stream coord to ui coords
                             let stream_size = texture.size_vec2();
                             let x = frame.rect.left_top().x + x / stream_size.x * frame.rect.width();
                             ui.painter().vline(x, 
-                                               Rangef::new(frame.rect.top(), frame.rect.bottom()), 
-                                               Stroke::new(1.0, color));
+                                                Rangef::new(frame.rect.top(), frame.rect.bottom()), 
+                                                Stroke::new(1.0, color));
                         }
                     }
                 }
@@ -251,7 +275,7 @@ impl App for MyUi {
                     tracing::trace!("start exercise display");
                     
                     // Load the gif
-                    let exercise_data = std::fs::read(&format!("/home/nvidia/Repositories/actionq/exercises/{}.webp", exercise_id)).unwrap();
+                    let exercise_data = std::fs::read(&format!("/home/nvidia/develop/actionq/exercises/{}.webp", exercise_id)).unwrap();
                     let exercise_frames = webp_animation::Decoder::new(&exercise_data).unwrap();
                     let exercise_frames: Vec<egui::ColorImage> = exercise_frames.into_iter()
                         .map(|f| { 
@@ -267,12 +291,14 @@ impl App for MyUi {
                         last_time: Instant::now()
                     });
                 },
-                Command::Update { state_output, repetitions_target, repetitions, frame } => {
+                Command::Update { state_output, repetitions_target, repetitions, capture } => {
                     tracing::trace!("display single frame");
 
-                    let frame_size = frame.framebuffer.size;
-                    let frame = egui::ColorImage::from_rgb([frame_size.0 as usize, frame_size.1 as usize], &frame.framebuffer.storage);
+                    let frame = egui::ColorImage::from_rgba_unmultiplied([capture.resolution.w as usize, capture.resolution.h as usize], &capture.frame);
                     self.current_frame = Some(frame);
+
+                    // Draw skeleton
+                    self.keypoints = capture.pose.keypoints_2d;
 
                     // Increase repetition count if necessary
                     self.repetition_count = repetitions;
@@ -300,7 +326,6 @@ impl App for MyUi {
                     self.help_text = None;
                     self.widgets = vec![];
                 },
-                _ => {}
             }
         }
 
@@ -329,13 +354,18 @@ pub fn run_ui_blocking(rx: Receiver<Command>) {
         eframe_options(), 
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
+
+            // static background image for now
+            let image = egui::ColorImage::new([1280, 720], Color32::from_gray(0));
+
             Ok(Box::new(MyUi {
                 is_running: false,
                 repetition_count: 0,
                 cmds: rx,
                 exercise_gif: None,
-                current_frame: None,
+                current_frame: Some(image),
                 widgets: vec![],
+                keypoints: vec![],
                 help_text: None
             }))
         }),

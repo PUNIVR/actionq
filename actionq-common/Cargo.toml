@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-glam = { version = "0.29.2", features = ["fast-math"] }
+glam = { workspace = true }

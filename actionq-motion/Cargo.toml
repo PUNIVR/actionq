@@ -1,8 +1,10 @@
 [package]
-name = "motion"
+name = "actionq-motion"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 mlua = { version = "0.10.0", features = ["lua54","vendored","send"] }
-glam = { version = "0.29.2", features = ["fast-math"] }
+glam = { workspace = true }
+
+actionq-common = { path = "../actionq-common" }

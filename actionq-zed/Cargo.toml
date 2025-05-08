@@ -1,0 +1,13 @@
+[package]
+name = "actionq-zed"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cxx = { version = "1.0.158", features = ["c++17"] }
+glam = { workspace = true }
+
+actionq-common = { path = "../actionq-common" }
+
+[build-dependencies]
+cxx-build = "1.0.158"
