@@ -25,3 +25,4 @@ egui = "0.29.1"
 actionq-common = { path = "../actionq-common" }
 actionq-motion = { path = "../actionq-motion" }
 actionq-zed    = { path = "../actionq-zed"    }
+clap = { version = "4.5.38", features = ["derive"] }

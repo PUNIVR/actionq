@@ -3,6 +3,7 @@
 use tokio;
 use tracing_subscriber::EnvFilter;
 use std::io::Read;
+use clap::Parser;
 
 mod pose;
 mod session;
@@ -11,6 +12,16 @@ mod firebase;
 mod common;
 
 use firebase::FirebaseProxy;
+
+#[derive(Parser)]
+struct Cli {
+    /// Firestore instance
+    #[arg(short, long, default_value_t = String::from("jp-obesity-dev"))]
+    project_id: String,
+    /// Id of the patient
+    #[arg(short, long, default_value_t = String::from("qjy4HHaJOEGkbn5QBt9J"))]
+    user_id: String,
+}
 
 fn setup_tracing() {
     tracing_subscriber::fmt()
@@ -25,7 +36,9 @@ fn setup_tracing() {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    
+   
+    let cli = Cli::parse();
+
     setup_tracing();
 
     //let fsm = exercise::JsonExercise::simple();
@@ -51,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let session = session::run_session(&pose, pose_receiver, ui_proxy, firebase);
 
             // This is the control interface of the system
-            firebase::listen_commands("5Y7GXWsn2eJKn7tq6l7I", "uvc-unisco", session, firebase_rx)
+            firebase::listen_commands(&cli.user_id, &cli.project_id, session, firebase_rx)
                 .await;
 
             //let server = network::run_websocket_server("0.0.0.0:3666", &session, &pose)

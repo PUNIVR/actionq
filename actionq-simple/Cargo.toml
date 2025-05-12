@@ -9,3 +9,4 @@ macroquad = "0.4"
 actionq-common = { path = "../actionq-common" }
 actionq-motion = { path = "../actionq-motion" }
 actionq-zed    = { path = "../actionq-zed"    }
+ctrlc = "3.4.7"

@@ -2,6 +2,7 @@ use actionq_motion::LuaExercise;
 use actionq_common::*;
 
 use macroquad::prelude::*;
+use ctrlc;
 
 fn configuration() -> Conf {
     Conf {
@@ -43,21 +44,32 @@ fn draw(capture: &CaptureData) {
 #[macroquad::main(configuration())]
 async fn main() {
 
+    ctrlc::set_handler(move || {
+        actionq_zed::finish();
+        std::process::exit(0);
+    }).expect("unable to set CTRL-C handler");
+
     let mut exercise = LuaExercise::from_file(
-        std::path::Path::new("../exercises/curl_3D.lua"), 
+        std::path::Path::new("exercises/ginocchia_3D.lua"), 
         "curl".to_string(), 
         "".to_string(), 
         5
     ).expect("unable to load exercise");
 
     actionq_zed::initialize();
-    loop {
+
+    let mut running = true;
+    while running {
         clear_background(BLACK);
 
         let capture = actionq_zed::extract();
         draw(&capture);
 
         let result = exercise.process(&capture);
+        if result.is_err() {
+            actionq_zed::finish();
+        }
+
         let (finish, state) = result.unwrap();
 
         if finish { break; }

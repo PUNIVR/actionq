@@ -75,6 +75,106 @@ pub fn add_functions_vec2(ctx: &Lua) -> LuaResult<()> {
 /// Add all helper functions related to Vec3
 pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
 
+    // Normalize
+    ctx.globals().set("normv3",
+        ctx.create_function(|_, v: LuaVec3| {
+            Ok(LuaVec3(v.0.normalize()))
+        })?
+    )?;
+
+    // Cross
+    ctx.globals().set("crossv3",
+        ctx.create_function(|_, (a, b): (LuaVec3, LuaVec3)| {
+            Ok(LuaVec3(a.0.cross(b.0)))
+        })?
+    )?;
+
+    // Dot
+    ctx.globals().set("dotv3",
+        ctx.create_function(|_, (a, b): (LuaVec3, LuaVec3)| {
+            Ok(a.0.dot(b.0))
+        })?
+    )?;
+
+    // Mul with float
+    ctx.globals().set("mulfv3",
+        ctx.create_function(|_, (a, b): (LuaVec3, f32)| {
+            Ok(LuaVec3(a.0 * b))
+        })?
+    )?;
+
+    // Mul
+    ctx.globals().set("mulv3",
+        ctx.create_function(|_, (a, b): (LuaVec3, LuaVec3)| {
+            Ok(LuaVec3(a.0 * b.0))
+        })?
+    )?;
+
+
+    // Subtract
+    ctx.globals().set("subv3",
+        ctx.create_function(|_, (a, b): (LuaVec3, LuaVec3)| {
+            Ok(LuaVec3(a.0 - b.0))
+        })?
+    )?;
+
+    // Mid
+    ctx.globals().set("midv3",
+        ctx.create_function(|_, (a, b): (LuaVec3, LuaVec3)| {
+            Ok(LuaVec3((a.0 + b.0) * 0.5))
+        })?
+    )?;
+
+    // Simple angle between vectors
+    ctx.globals().set("anglev3",
+        ctx.create_function(|_, (a, b): (LuaVec3, LuaVec3)| {
+            let angle = a.0.dot(b.0).acos();
+            Ok(angle.to_degrees())
+        })?
+    )?;
+
+    // Simple signed-angle between vectors
+    ctx.globals().set("sanglev3",
+        ctx.create_function(|_, (a, b, n): (LuaVec3, LuaVec3, LuaVec3)| {
+            let angle = a.0.dot(b.0).acos();
+            let sign = (n.0.dot(a.0.cross(b.0))).signum();
+            Ok(sign * angle.to_degrees())
+        })?
+    )?;
+
+    // Project a vector into a plane defined by a normal
+    // NOTE: all input must be nornalized
+    ctx.globals().set("projv3",
+        ctx.create_function(|_, (v, n): (LuaVec3, LuaVec3)| {
+            Ok(LuaVec3((v.0 - v.0.dot(n.0) * n.0).normalize()))
+        })?
+    )?;
+
+    // Crate the local reference system (sagittal, frontal and transverse normal vectors) of the body
+    // It requires the shouldes and hips keypoints 
+    ctx.globals().set("body_planes",
+        ctx.create_function(|lua, (ls, rs, lh, rh): (LuaVec3, LuaVec3, LuaVec3, LuaVec3)| {
+
+            // Sagittal plane normal
+            let sagittal = (ls.0 - rs.0).normalize();
+
+            // Transverse plane normal
+            let ms = rs.0.midpoint(ls.0);
+            let mh = rh.0.midpoint(lh.0);
+            let transverse = (mh - ms).normalize();
+
+            // Frontal plane
+            let frontal = sagittal.cross(transverse).normalize();
+
+            let result = lua.create_table()?;
+            result.set("sagittal", LuaVec3(sagittal))?;
+            result.set("frontal", LuaVec3(frontal))?;
+            result.set("transverse", LuaVec3(transverse))?;
+            Ok(result)
+        })?
+    )?;
+
+
     // Inner angle without reference plane
     ctx.globals().set("inner_angle_3d",
         ctx.create_function(|_, (a, m, b): (LuaVec3, LuaVec3, LuaVec3)| {
