@@ -319,11 +319,12 @@ fn stream(binary_filepath: &str, url: &str) {
             .expect("unable to accept websocket connection");
         println!("connection accepted! streaming data...");
 
+        let exercise_id: &str = binary_filepath.split('.').collect::<Vec<&str>>()[0];
         let msg = GUICommand::ExerciseStart {
-            exercise_id: "<TODO>".to_owned(),
+            exercise_id: exercise_id.to_owned(),
             repetitions_target: storage.repetitions_target,
             resolution: storage.resolution,
-            frame_rate: storage.frame_rate
+            frame_rate: storage.frame_rate,
         };
 
         // Serialize initial command
