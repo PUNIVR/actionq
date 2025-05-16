@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use show_image::{ImageInfo, ImageView};
 use image::codecs::jpeg::JpegEncoder;
 
-use motion::{LuaExercise, Metadata, Skeleton, StateEvent};
+use motion::{LuaExercise, Metadata, Skeleton, StateEvent, Widget};
 use tungstenite::accept;
 use yolo::Point2;
 
@@ -220,10 +220,6 @@ fn register(lua: &str, repetitions_target: u32, output: &Option<String>) -> ort:
                 &mut frame, (kp.x as i32, kp.y as i32), 4, image::Rgb([255,255,255]));
         }
 
-        let image = ImageView::new(ImageInfo::rgb8(640, 480), &frame);
-		window.set_image("inference", image)
-			.unwrap();
-
         // Evaluate and store
         let (completed, result) = exercise.process(&keypoints).unwrap();
         
@@ -233,6 +229,33 @@ fn register(lua: &str, repetitions_target: u32, output: &Option<String>) -> ort:
             if result.metadata.events.iter().any(|x| *x == StateEvent::Repetition) {
                 repetitions += 1;
             }
+
+            for widget in &result.metadata.widgets {
+                if let Widget::Arc { center, radius, from, to } = widget {
+                    
+                    let angle_span = (to - from).abs() % 360.0;
+                    let angle_step = angle_span / 5.0;
+
+                    let clockwise = to < from;
+
+                    let mut points: Vec<(f32, f32)> = vec![];
+                    for i in 0..6 {
+                        let angle = from + if clockwise { -angle_step * i as f32 } else { angle_step * i as f32 };
+                        let angle = (angle % 360.0).to_radians();
+
+                        let x = center.x + radius * angle.cos();
+                        let y = center.y - radius * angle.sin();
+
+                        points.push((x, y));
+                    }   
+
+                    for i in 0..(points.len() - 1) {
+                        imageproc::drawing::draw_line_segment_mut(&mut frame, 
+                            points[i], points[i + 1], image::Rgb([255,255,255]));
+                    }
+
+                }
+            }
         }
 
         storage.frames.push(StorageFrame {
@@ -241,6 +264,10 @@ fn register(lua: &str, repetitions_target: u32, output: &Option<String>) -> ort:
             metadata: metadata,
             repetitions
         });
+
+        let image = ImageView::new(ImageInfo::rgb8(640, 480), &frame);
+		window.set_image("inference", image)
+			.unwrap();
 
         //let memory: usize = storage.iter().map(|e| e.frame.len()).sum();
         //println!("memory: {} MB", memory as f32 / 1e6);
@@ -268,9 +295,11 @@ fn register(lua: &str, repetitions_target: u32, output: &Option<String>) -> ort:
 }
 
 fn stream(binary_filepath: &str, url: &str) {
-
+    
     // Read file content
     let filepath = Path::new("samples").join(&binary_filepath);
+    println!("reading {:?}", filepath);
+
     let mut file = std::fs::File::open(&filepath).expect("no file found");
     let metadata = std::fs::metadata(&filepath).expect("unable to read metadata");
     let mut bytes = vec![0; metadata.len() as usize];
