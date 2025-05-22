@@ -39,15 +39,17 @@ end
 
 -- Creates example widgets for the sk
 function widgets(sk)
+	local midhip = aq.math.midv2(sk.kp2d.left_hip, sk.kp2d.right_hip)
+	print(midhip[1] .. midhip[2])
 	return {
 		{
 			widget = "circle",
-			position = sk.kp2d.right_hip,
+			position = sk.kp2d.right_knee,
 			text = "RH",
 		},
 		{
 			widget = "circle",
-			position = sk.kp2d.left_hip,
+			position = sk.kp2d.left_knee,
 			text = "LH",
 		},
 		{
@@ -55,6 +57,18 @@ function widgets(sk)
 			position = sk.kp2d.neck,
 			text = "NK",
 		},
+		{
+			widget = "vline",
+			x = sk.kp2d.left_knee[1]
+		},
+		{
+			widget = "vline",
+			x = sk.kp2d.right_knee[1]
+		},
+		{
+			widget = "hline",
+			y = midhip[2]
+		}
 	}
 end
 
@@ -65,13 +79,16 @@ LAST_SIDE = "left"
 -- iniziale corretta.
 function entry(sk, params)
 
+	aq.draw.circle(sk.kp2d.right_knee, "RK")
+	aq.draw.circle(sk.kp2d.left_knee, "LK")
+
 	if near(0.0, params.center_delta, knee_delta(sk)) then
 		print("entry -> center")
-		return step("center", {
+		return aq.state.step("center", {
 			events = { "start" },
 		})
 	end
-	return stay({
+	return aq.state.stay({
 		help = "Allinea le ginocchia",
 		--widgets = widgets(sk),
 	})
@@ -80,15 +97,18 @@ end
 function center(sk, params)
 	local delta = knee_delta(sk)
 	
+	aq.draw.segment(sk.kp2d.right_knee, sk.kp2d.right_hip)
+	aq.draw.segment(sk.kp2d.left_knee, sk.kp2d.left_hip)
+
 	-- Deve muovere a destra
 	if LAST_SIDE == "left" then
 		if delta >= params.dist_target then
 			print("center -> right")
-			return step("right")
+			return aq.state.step("right")
 		end
-		return stay({
+		return aq.state.stay({
 			help = "Alza il ginocchio destro",
-			--widgets = widgets(sk),
+			widgets = widgets(sk),
 		})
 	end
 
@@ -96,12 +116,12 @@ function center(sk, params)
 	if LAST_SIDE == "right" then
 		if delta <= -params.dist_target then
 			print("center -> left")
-			return step("left")
+			return aq.state.step("left")
 		end
 
-		return stay({
+		return aq.state.stay({
 			help = "Alza il ginocchio sinistro",
-			--widgets = widgets(sk),
+			widgets = widgets(sk),
 		})
 	end
 	-- Unreachable
@@ -109,28 +129,36 @@ function center(sk, params)
 end
 
 function right(sk, params)
+
+	aq.draw.circle(sk.kp2d.right_knee, "RK")
+	aq.draw.circle(sk.kp2d.left_knee, "LK")
+
 	LAST_SIDE = "right"
 	if near(0.0, params.center_delta, knee_delta(sk)) then
 		print("right -> center")
-		return step("center")
+		return aq.state.step("center")
 	end
 
-	return stay({
+	return aq.state.stay({
 		help = "Abbassa il ginocchio destro",
 		--widgets = widgets(sk),
 	})
 end
 
 function left(sk, params)
+
+	aq.draw.circle(sk.kp2d.right_knee, "RK")
+	aq.draw.circle(sk.kp2d.left_knee, "LK")
+
 	LAST_SIDE = "left"
 	if near(0.0, params.center_delta, knee_delta(sk)) then
 		print("left -> center")
-		return step("center", {
+		return aq.state.step("center", {
 			events = { "repetition" },
 		})
 	end
 
-	return stay({
+	return aq.state.stay({
 		help = "Abbassa il ginocchio sinistro",
 		--widgets = widgets(sk),
 	})
