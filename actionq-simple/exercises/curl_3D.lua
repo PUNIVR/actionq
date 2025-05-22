@@ -13,6 +13,11 @@ JOINTS = {
 -- All states of the system except the start one
 STATES = { "down", "up" }
 
+-- Parameters of the exercise
+PARAMETERS = {
+	work_angle = 40.0,
+}
+
 WORK_ANGLE_THRESHOLD = 40.0
 ALIGN_ANGLE_MARGIN = 30.0
 
@@ -47,7 +52,6 @@ end
 -- Stato iniziale della FSM, usato per controllare se il paziente è nella posizione
 -- iniziale corretta.
 function entry(skeleton)
-
 	local angle = arms_angle(skeleton)
 	if near(180.0, 35.0, angle.left) and near(180.0, 35.0, angle.right) then
 		print("entry -> down")
