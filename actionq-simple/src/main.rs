@@ -1,6 +1,7 @@
 use actionq_motion::LuaExercise;
 use actionq_common::*;
 
+use std::collections::HashMap;
 use macroquad::prelude::*;
 use ctrlc;
 
@@ -20,7 +21,7 @@ fn signed_angle(v1: (f32, f32), v2: (f32, f32)) -> f32 {
 }
 
 fn draw(capture: &CaptureData) {
-    let pose_2d = skeleton_map_body_coco18(&capture.pose.keypoints_2d);
+    let pose_2d = &capture.pose.kp2d;
 
     let rs = pose_2d["right_shoulder"];
     draw_circle(rs.x, rs.y, 10.0, RED);
@@ -53,8 +54,14 @@ async fn main() {
         std::path::Path::new("exercises/ginocchia_3D.lua"), 
         "curl".to_string(), 
         "".to_string(), 
-        5
+        2,
+        // Custom parameters
+        &[
+            ("dist_target".to_string(), 25.0)
+        ]
     ).expect("unable to load exercise");
+    dbg!(&exercise);
+    //return;
 
     actionq_zed::initialize();
 

@@ -9,6 +9,20 @@ JOINTS = {
 -- All states of the system except the start one
 STATES = { "center", "left", "right" }
 
+-- Exercise parameters
+PARAMETERS = {
+	{
+		name = "dist_target",
+		description = "<TODO>",
+		default = 20.0
+	},
+	{
+		name = "center_delta",
+		description = "<TODO>",
+		default = 5.0
+	}
+}
+
 -- What angle to reach
 DIST_TARGET = 20.0
 -- Delta allowed
@@ -18,7 +32,7 @@ CENTER_DELTA = 5.0
 function setup() end
 
 function knee_delta(sk)
-	local delta = (sk.right_knee.y - sk.left_knee.y) * 100
+	local delta = (sk.kp3d.right_knee[2] - sk.kp3d.left_knee[2]) * 100
 	print("knee delta: " .. delta)
 	return -delta -- change sign, this make the right delta positive
 end
@@ -28,17 +42,17 @@ function widgets(sk)
 	return {
 		{
 			widget = "circle",
-			position = sk.right_hip,
+			position = sk.kp2d.right_hip,
 			text = "RH",
 		},
 		{
 			widget = "circle",
-			position = sk.left_hip,
+			position = sk.kp2d.left_hip,
 			text = "LH",
 		},
 		{
 			widget = "circle",
-			position = sk.neck,
+			position = sk.kp2d.neck,
 			text = "NK",
 		},
 	}
@@ -49,9 +63,9 @@ LAST_SIDE = "left"
 
 -- Stato iniziale della FSM, usato per controllare se il paziente è nella posizione
 -- iniziale corretta.
-function entry(sk)
+function entry(sk, params)
 
-	if near(0.0, CENTER_DELTA, knee_delta(sk)) then
+	if near(0.0, params.center_delta, knee_delta(sk)) then
 		print("entry -> center")
 		return step("center", {
 			events = { "start" },
@@ -63,12 +77,12 @@ function entry(sk)
 	})
 end
 
-function center(sk)
+function center(sk, params)
 	local delta = knee_delta(sk)
 	
 	-- Deve muovere a destra
 	if LAST_SIDE == "left" then
-		if delta >= DIST_TARGET then
+		if delta >= params.dist_target then
 			print("center -> right")
 			return step("right")
 		end
@@ -80,7 +94,7 @@ function center(sk)
 
 	-- Deve muovere a sinistra
 	if LAST_SIDE == "right" then
-		if delta <= -DIST_TARGET then
+		if delta <= -params.dist_target then
 			print("center -> left")
 			return step("left")
 		end
@@ -94,9 +108,9 @@ function center(sk)
 	-- PANIC
 end
 
-function right(sk)
+function right(sk, params)
 	LAST_SIDE = "right"
-	if near(0.0, CENTER_DELTA, knee_delta(sk)) then
+	if near(0.0, params.center_delta, knee_delta(sk)) then
 		print("right -> center")
 		return step("center")
 	end
@@ -107,9 +121,9 @@ function right(sk)
 	})
 end
 
-function left(sk)
+function left(sk, params)
 	LAST_SIDE = "left"
-	if near(0.0, CENTER_DELTA, knee_delta(sk)) then
+	if near(0.0, params.center_delta, knee_delta(sk)) then
 		print("left -> center")
 		return step("center", {
 			events = { "repetition" },
