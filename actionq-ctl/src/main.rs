@@ -21,8 +21,11 @@ struct Cli {
 enum ArgsContext {
     /// Run singe exercise
     Exercise {
-        /// Id of the patient inside the database
+        /// Id of the root patient inside the database
         patient: String,
+        /// Optional id of the target patient (RSA mode)
+        #[arg(long)]
+        target_patient: Option<String>,
         /// Id of the exercise inside the database
         exercise: String,
         /// Number of repetitions
@@ -85,6 +88,7 @@ fn main() {
     match args.context {
         ArgsContext::Exercise {
             patient,
+            target_patient,
             exercise,
             repetitions,
             parameters,
@@ -101,7 +105,7 @@ fn main() {
 
             dbg!(&parameters);
             sync_async!(rt, ctrl.run_exercise(
-                exercise, repetitions, parameters).await);
+                exercise, repetitions, target_patient, parameters).await);
         }
         ArgsContext::Reset { patient } => {
             let ctrl =

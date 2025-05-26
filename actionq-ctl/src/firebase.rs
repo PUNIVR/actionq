@@ -7,9 +7,9 @@ use uuid::Uuid;
 
 use actionq_motion::ParameterDescriptor;
 use actionq_common::{
-    JetsonRequest, JetsonRequestWrap, JetsonExerciseRequest,
+    JetsonRequest, JetsonExerciseRequest,
     firebase::{
-        JetsonInterface, ExerciseTemplate
+        IdempotencyWrap, JetsonInterface, ExerciseTemplate
     }
 };
 
@@ -48,7 +48,7 @@ impl SessionCtrl {
             .in_col("jetson")
             .document_id(&self.patient_id)
             .object(&JetsonInterface {
-                request: Some(JetsonRequestWrap {
+                request: Some(IdempotencyWrap::<JetsonRequest> {
                     inner: request,
                     dedup_id
                 }),
@@ -65,8 +65,10 @@ impl SessionCtrl {
     }
 
     // Run single exercise
-    pub async fn run_exercise(&self, exercise_id: String, num_repetitions: u32, parameters: Option<HashMap<String, f32>>) {
-        self.update_command(JetsonRequest::SessionStart { 
+    pub async fn run_exercise(&self, exercise_id: String, num_repetitions: u32, patient_id: Option<String>, 
+                              parameters: Option<HashMap<String, f32>>) {
+        self.update_command(JetsonRequest::SessionStart {
+            patient_id,
             save: false, 
             exercises: vec![
                 JetsonExerciseRequest {

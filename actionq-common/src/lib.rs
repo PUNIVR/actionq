@@ -66,7 +66,7 @@ pub struct CaptureData {
 
 /// Describe an exercise request
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "PascalCase")]
+#[serde(rename_all = "PascalCase")]
 pub struct JetsonExerciseRequest {
     /// Overwrites default parameters of the exercise
     pub parameters: Option<HashMap<String, f32>>,
@@ -76,15 +76,6 @@ pub struct JetsonExerciseRequest {
     pub exercise_id: String,
 }
 
-/// Wrapper for a Jetson request with an unique Id to prevent idempotency removal of events
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "Type", rename_all = "PascalCase")]
-pub struct JetsonRequestWrap {
-    #[serde(flatten)]
-    pub inner: JetsonRequest,
-    pub dedup_id: String,
-}
-
 /// Possible requests for the Jetson
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "Type", rename_all_fields = "PascalCase")]
@@ -92,6 +83,9 @@ pub enum JetsonRequest {
     /// Starts a new session, if one is already in progress then connect to that
     /// session without starting a new one
     SessionStart {
+        /// Optional patient Id, if present the session and exercise data is stored in his database
+        /// section (Used for the RSA mode). Otherwise they are stored in the Jetson root patient_id.
+        patient_id: Option<String>,
         /// The exercises that must be completed in this session, they are in order of execution
         exercises: Vec<JetsonExerciseRequest>,
         /// True if the engine should save the exercise execution log into the database
@@ -113,8 +107,18 @@ pub enum JetsonResponse { }
 
 /// Contains all objects used only in the database
 pub mod firebase {
-    use super::{JetsonRequestWrap, JetsonResponse};
+    use super::{JetsonRequest, JetsonResponse};
     use serde::{Serialize, Deserialize};
+    
+    /// Wrapper for a Jetson request or response with an unique Id to prevent idempotency removal of events
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    pub struct IdempotencyWrap<T> {
+        pub dedup_id: String,
+        #[serde(flatten)]
+        pub inner: T,
+    }
+
 
     /// Descriptor of an exercise
     /// NOTE: The default parameters are not included, are they are present in the FSM script
@@ -134,7 +138,7 @@ pub mod firebase {
     #[serde(rename_all = "PascalCase")]
     pub struct JetsonInterface {
         /// Buffer where requests are written by the clients
-        pub request: Option<JetsonRequestWrap>,
+        pub request: Option<IdempotencyWrap<JetsonRequest>>,
         /// Buffer where responses are written by the jetson
         pub response: Option<JetsonResponse>
     }
