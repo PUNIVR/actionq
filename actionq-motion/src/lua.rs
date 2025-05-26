@@ -1,10 +1,12 @@
-use crate::common::*;
 use mlua::prelude::*;
+use crate::widget::*;
 
 /// Add all helper functions related to FSM behaviour
-pub fn add_functions_control(ctx: &Lua) -> LuaResult<()> {
+pub fn control_module(ctx: &Lua) -> LuaResult<LuaTable> {
+    let state = ctx.create_table()?;
+
     // Stay on same state, optionally supports state metadata
-    ctx.globals().set(
+    state.set(
         "stay",
         ctx.create_function(|lua, metadata: Option<LuaTable>| {
             let result = lua.create_table()?; // Create basic table
@@ -15,7 +17,7 @@ pub fn add_functions_control(ctx: &Lua) -> LuaResult<()> {
     )?;
 
     // Change state, first argument is the next state, optionally supports metadata
-    ctx.globals().set(
+    state.set(
         "step",
         ctx.create_function(|lua, (next_state, metadata): (String, Option<LuaTable>)| {
             //println!("next_state: {}", next_state);
@@ -26,13 +28,74 @@ pub fn add_functions_control(ctx: &Lua) -> LuaResult<()> {
         })?,
     )?;
 
-    Ok(())
+    Ok(state)
+}
+
+/// Add all function used to draw widgets
+pub fn draw_module(ctx: &Lua) -> LuaResult<LuaTable> {
+    let draw = ctx.create_table()?;
+
+    draw.set("circle",
+        ctx.create_function(|lua, (pos, text): (LuaValue, Option<String>)| {
+            let buffer: LuaTable = lua.globals().get("_widgets_buffer")?;
+            buffer.push(lua.to_value(&Widget::Circle {
+                text_offset: glam::Vec2::new(0.0, 0.0),
+                position: lua.from_value(pos)?,
+                text,
+            })?)?;
+            Ok(())
+        })?
+    )?;
+
+    draw.set("segment",
+        ctx.create_function(|lua, (from, to): (LuaValue, LuaValue)| {
+            let buffer: LuaTable = lua.globals().get("_widgets_buffer")?;
+            buffer.push(lua.to_value(&Widget::Segment {
+                from: lua.from_value(from)?,
+                to: lua.from_value(to)?,
+            })?)?;
+            Ok(())
+        })?
+    )?;
+
+    draw.set("arc",
+        ctx.create_function(|lua, (center, radius, angle, delta): (LuaValue, f32, f32, f32)| {
+            let buffer: LuaTable = lua.globals().get("_widgets_buffer")?;
+            buffer.push(lua.to_value(&Widget::Arc {
+                center: lua.from_value(center)?,
+                radius,
+                angle,
+                delta
+            })?)?;
+            Ok(())
+        })?
+    )?;
+
+    draw.set("vline",
+        ctx.create_function(|lua, x: f32| {
+            let buffer: LuaTable = lua.globals().get("_widgets_buffer")?;
+            buffer.push(lua.to_value(&Widget::VLine { x })?)?;
+            Ok(())
+        })?
+    )?;
+
+    draw.set("hline",
+        ctx.create_function(|lua, y: f32| {
+            let buffer: LuaTable = lua.globals().get("_widgets_buffer")?;
+            buffer.push(lua.to_value(&Widget::HLine { y })?)?;
+            Ok(())
+        })?
+    )?;
+
+    Ok(draw)
 }
 
 /// Add all helper functions related to Vec3
-pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
+pub fn math_module(ctx: &Lua) -> LuaResult<LuaTable> {
+    let math = ctx.create_table()?;
+
     // Normalize
-    ctx.globals().set(
+    math.set(
         "normv3",
         ctx.create_function(|lua, v: LuaValue| {
             let v: glam::Vec3 = lua.from_value(v)?;
@@ -41,7 +104,7 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
     )?;
 
     // Cross
-    ctx.globals().set(
+    math.set(
         "crossv3",
         ctx.create_function(|lua, (a, b): (LuaValue, LuaValue)| {
             let a: glam::Vec3 = lua.from_value(a)?;
@@ -51,7 +114,7 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
     )?;
 
     // Dot
-    ctx.globals().set(
+    math.set(
         "dotv3",
         ctx.create_function(|lua, (a, b): (LuaValue, LuaValue)| {
             let a: glam::Vec3 = lua.from_value(a)?;
@@ -61,7 +124,7 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
     )?;
 
     // Mul with float
-    ctx.globals().set(
+    math.set(
         "mulfv3",
         ctx.create_function(|lua, (a, b): (LuaValue, f32)| {
             let a: glam::Vec3 = lua.from_value(a)?;
@@ -70,7 +133,7 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
     )?;
 
     // Mul
-    ctx.globals().set(
+    math.set(
         "mulv3",
         ctx.create_function(|lua, (a, b): (LuaValue, LuaValue)| {
             let a: glam::Vec3 = lua.from_value(a)?;
@@ -80,7 +143,7 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
     )?;
 
     // Subtract
-    ctx.globals().set(
+    math.set(
         "subv3",
         ctx.create_function(|lua, (a, b): (LuaValue, LuaValue)| {
             let a: glam::Vec3 = lua.from_value(a)?;
@@ -90,7 +153,7 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
     )?;
 
     // Mid
-    ctx.globals().set(
+    math.set(
         "midv3",
         ctx.create_function(|lua, (a, b): (LuaValue, LuaValue)| {
             let a: glam::Vec3 = lua.from_value(a)?;
@@ -98,9 +161,17 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
             lua.to_value(((a + b) * 0.5).as_ref())
         })?,
     )?;
+    math.set(
+        "midv2",
+        ctx.create_function(|lua, (a, b): (LuaValue, LuaValue)| {
+            let a: glam::Vec2 = lua.from_value(a)?;
+            let b: glam::Vec2 = lua.from_value(b)?;
+            lua.to_value(((a + b) * 0.5).as_ref())
+        })?,
+    )?;
 
     // Simple angle between vectors
-    ctx.globals().set(
+    math.set(
         "anglev3",
         ctx.create_function(|lua, (a, b): (LuaValue, LuaValue)| {
             let a: glam::Vec3 = lua.from_value(a)?;
@@ -111,7 +182,7 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
     )?;
 
     // Simple signed-angle between vectors
-    ctx.globals().set(
+    math.set(
         "sanglev3",
         ctx.create_function(|lua, (a, b, n): (LuaValue, LuaValue, LuaValue)| {
             let a: glam::Vec3 = lua.from_value(a)?;
@@ -126,7 +197,7 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
 
     // Project a vector into a plane defined by a normal
     // NOTE: all input must be nornalized
-    ctx.globals().set(
+    math.set(
         "projv3",
         ctx.create_function(|lua, (v, n): (LuaValue, LuaValue)| {
             let v: glam::Vec3 = lua.from_value(v)?;
@@ -137,7 +208,7 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
 
     // Crate the local reference system (sagittal, frontal and transverse normal vectors) of the body
     // It requires the shouldes and hips keypoints
-    ctx.globals().set(
+    math.set(
         "body_planes",
         ctx.create_function(
             |lua, (ls, rs, lh, rh): (LuaValue, LuaValue, LuaValue, LuaValue)| {
@@ -167,7 +238,7 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
     )?;
 
     // Inner angle without reference plane
-    ctx.globals().set(
+    math.set(
         "inner_angle_3d",
         ctx.create_function(|lua, (a, m, b): (LuaValue, LuaValue, LuaValue)| {
             let a: glam::Vec3 = lua.from_value(a)?;
@@ -185,7 +256,7 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
     )?;
 
     // Inner angle with reference plane
-    ctx.globals().set(
+    math.set(
         "inner_angle_3d_aligned",
         ctx.create_function(
             |lua, (a, m, b, n): (LuaValue, LuaValue, LuaValue, LuaValue)| {
@@ -208,5 +279,5 @@ pub fn add_functions_vec3(ctx: &Lua) -> LuaResult<()> {
         )?,
     )?;
 
-    Ok(())
+    Ok(math)
 }

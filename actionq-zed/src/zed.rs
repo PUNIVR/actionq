@@ -74,12 +74,16 @@ impl Into<CaptureData> for ffi::CaptureData {
                 w: self.width,
             },
             pose: Pose {
-                keypoints_2d: self.pose.keypoints_2d.into_iter()
-                    .map(Into::into)
-                    .collect(),
-                keypoints_3d: self.pose.keypoints_3d.into_iter()
-                    .map(Into::into)
-                    .collect()
+                kp2d: skeleton_map_body_coco18(
+                    &self.pose.keypoints_2d.iter()
+                        .map(|v| glam::Vec2::new(v.x, v.y))
+                        .collect()
+                    ),
+                kp3d: skeleton_map_body_coco18(
+                    &self.pose.keypoints_3d.iter()
+                        .map(|v| glam::Vec3::new(v.x, v.y, v.z))
+                        .collect()
+                    )
             }
         }
     }

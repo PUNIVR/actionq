@@ -1,6 +1,5 @@
 #![allow(dead_code, unused_imports)]
 
-mod common;
 mod lua;
 mod widget;
 
@@ -10,10 +9,31 @@ use actionq_common::{
 use glam::{Vec2, Vec3};
 use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, ops::Deref, path::Path};
+use std::{collections::{HashMap, HashSet}, ops::Deref, path::Path};
 
-pub use common::*;
 pub use widget::*;
+
+/// Describes a exercise parameter
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParameterDescriptor {
+    name: String,
+    description: String,
+    default: f32
+}
+
+/// A Parameter is unique depending on its name
+impl std::hash::Hash for ParameterDescriptor {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+
+impl Eq for ParameterDescriptor {}
+impl PartialEq for ParameterDescriptor {
+    fn eq (self: & Self, other: &Self) -> bool {
+        self.name.eq(&other.name)
+    }
+}
 
 /// Exercise represented using a Lua script
 #[derive(Debug)]
@@ -24,8 +44,10 @@ pub struct LuaExercise {
     pub description: String,
     /// Name of the exercise inside the database
     pub name: String,
-    /// Runtime parameters for the exercise
-    pub default_parameters: HashMap<String, f32>,
+    /// Default parameters of the exercise from script
+    pub default_parameters: HashSet<ParameterDescriptor>,
+    /// Actual runtime parameters of the exercise
+    pub parameters: HashMap<String, f32>,
     /// Target number of repetitions to do
     pub repetitions_target: u32,
     /// Current number of repetitions done
@@ -35,6 +57,8 @@ pub struct LuaExercise {
     /// All invokable functions from the engine,
     /// includes "setup", "load" and all functions defined in the STATES global variable
     functions: HashMap<String, LuaFunction>,
+    /// Scratch buffer for widgets drawing
+    widgets: LuaTable,
     /// Current state name
     pub current_state: String,
     /// This get reseted at each repetition and is used for the repetition score
@@ -150,11 +174,11 @@ impl LuaExercise {
     fn create_lua_ctx() -> LuaResult<Lua> {
         let ctx = Lua::new();
 
-        lua::add_functions_control(&ctx)?;
-
-        // Skeleton functions
-        //lua::add_functions_vec2(&ctx)?;
-        lua::add_functions_vec3(&ctx)?;
+        let aq = ctx.create_table()?;
+        aq.set("state", lua::control_module(&ctx)?)?;
+        aq.set("draw",  lua::draw_module(&ctx)?)?;
+        aq.set("math",  lua::math_module(&ctx)?)?;
+        ctx.globals().set("aq", aq)?;
 
         // Near values by a margin
         ctx.globals().set(
@@ -174,9 +198,10 @@ impl LuaExercise {
         name: String,
         description: String,
         repetitions_target: u32,
+        build_parameters: &[(String, f32)],
     ) -> LuaResult<Self> {
         let fsm = std::fs::read_to_string(path)?;
-        Self::from_string(fsm, name, description, repetitions_target)
+        Self::from_string(fsm, name, description, repetitions_target, build_parameters)
     }
 
     /// Initialize esercise from Lua script as a string
@@ -185,6 +210,7 @@ impl LuaExercise {
         name: String,
         description: String,
         repetitions_target: u32,
+        build_parameters: &[(String, f32)],
     ) -> LuaResult<Self> {
         let ctx = Self::create_lua_ctx()?;
         ctx.load(script).exec()?;
@@ -200,6 +226,10 @@ impl LuaExercise {
             Ok(())
         })?;
 
+        // Add scratch buffer for widgets drawing
+        globals.set("_widgets_buffer", ctx.create_table()?)?;
+        let widgets: LuaTable = globals.get("_widgets_buffer")?;
+
         // Hardcoded functions
         functions.insert("setup".to_string(), globals.get::<LuaFunction>("setup")?);
         functions.insert("entry".to_string(), globals.get::<LuaFunction>("entry")?);
@@ -208,13 +238,25 @@ impl LuaExercise {
         let required_joints = globals.get::<Vec<String>>("JOINTS")?;
 
         // Obtain default configuration
-        let default_parameters: HashMap<String, f32> = globals.get("PARAMETERS")?;
+        let default_parameters: HashSet<ParameterDescriptor> = globals.get::<LuaTable>("PARAMETERS")?
+            .sequence_values()
+            .map(|v| ctx.from_value::<ParameterDescriptor>(v.unwrap())
+                .expect("Invalid parameter definition!"))
+            .collect();
+
+        // The runtime configuration is the default one updated with build configuration
+        let mut parameters: HashMap<String, f32> = default_parameters.iter()
+            .map(|p| (p.name.clone(), p.default))
+            .collect();
+
+        parameters.extend(build_parameters.iter().cloned());
 
         Ok(Self {
             ctx,
             name,
             description,
             default_parameters,
+            parameters,
             repetitions_target,
             required_joints,
             current_state: "entry".to_string(),
@@ -222,15 +264,8 @@ impl LuaExercise {
             frames: vec![],
             repetitions: 0,
             functions,
+            widgets
         })
-    }
-
-    /// Convert a normal skeleton to a Lua table
-    fn convert_skeleton(&self, skeleton: &SkeletonMap3D) -> LuaSkeletonMap3D {
-        skeleton
-            .iter()
-            .map(|(k, v): (&String, &Vec3)| (k.clone(), (*v).into()))
-            .collect()
     }
 
     /// Change current state based on the current state output
@@ -273,32 +308,40 @@ impl LuaExercise {
             .get(&self.current_state)
             .expect("Invalid current state!");
 
-        let pose_2d = skeleton_map_body_coco18(&capture.pose.kp2d);
-        let pose_3d = skeleton_map_body_coco18(&capture.pose.kp3d);
+        // Reset widgets scratch buffer
+        self.widgets.clear()?;
 
         // If any required joint is missing from the frame skeleton, skip processing
         if self
             .required_joints
             .iter()
-            .any(|j| !pose_2d.contains_key(j))
+            .any(|j| !capture.pose.kp2d.contains_key(j))
         {
             let missing: Vec<String> = self
                 .required_joints
                 .iter()
                 .cloned()
-                .filter(|j| !pose_2d.contains_key(j))
+                .filter(|j| !capture.pose.kp2d.contains_key(j))
                 .collect();
 
-            let available: Vec<String> = pose_2d.keys().into_iter().cloned().collect();
+            let available: Vec<String> = capture.pose.kp2d.keys().into_iter().cloned().collect();
             println!("missing: {:?}, available: {:?}", missing, available);
             return Ok((false, None));
         }
 
         // Evaluate current frame
-        let lua_pose_3d = self.convert_skeleton(&pose_3d);
-        let output: StateOutput = state_fn.call(lua_pose_3d)?;
+        let mut output: StateOutput = state_fn.call((
+            self.ctx.to_value(&capture.pose)?, 
+            self.ctx.to_value(&self.parameters)?
+        ))?;
 
-        self.store(&pose_2d, &output);
+        // Insert widgets from the immediate mode into the output
+        for widget in self.widgets.sequence_values() {
+            let widget: Widget = self.ctx.from_value(widget?)?;
+            output.metadata.widgets.push(widget);
+        }
+
+        self.store(&capture.pose.kp2d, &output);
         self.update_current_state(&output);
         self.update_repetitions(&output);
         self.update_warnings(&output);

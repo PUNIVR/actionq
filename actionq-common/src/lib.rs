@@ -1,3 +1,4 @@
+use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 
 /// Keypoints names of the COCO18 body
@@ -47,12 +48,12 @@ pub struct Resolution {
 }
 
 /// The captured pose of a person
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pose {
     /// Screen-space coordinates of the person's keypoints relative to the left camera
-    pub kp2d: Skeleton2D,
+    pub kp2d: SkeletonMap2D,
     /// Global coordinates of the person's keypoints in 3D space
-    pub kp3d: Skeleton3D,
+    pub kp3d: SkeletonMap3D,
 }
 
 /// A captured frame and 2D/3D skeleton

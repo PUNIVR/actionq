@@ -1,10 +1,10 @@
-use crate::common::*;
-use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
+use mlua::prelude::*;
 
 /// Custom widget to draw on screen over the video stream.
 /// Used to help the patient reach the exercise goal.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "widget")]
 pub enum Widget {
     /// Small circle
     Circle {
@@ -29,9 +29,9 @@ pub enum Widget {
         /// Distance from the center
         radius: f32,
         /// Starting angle anti-clockwise
-        from: f32,
-        /// Ending angle anti-clockwise
-        to: f32,
+        angle: f32,
+        /// Delta angle anti-clockwise
+        delta: f32,
     },
     /// Vertical line
     VLine { x: f32 },
@@ -41,33 +41,22 @@ pub enum Widget {
 
 /// Create a Widget from a Lua table
 impl FromLua for Widget {
-    fn from_lua(value: LuaValue, _: &Lua) -> LuaResult<Self> {
+    fn from_lua(value: LuaValue, lua: &Lua) -> LuaResult<Self> {
         if let LuaValue::Table(t) = value {
             let widget_type: String = t.get("widget")?;
             return Ok(match widget_type.as_str() {
                 "circle" => {
-                    // From LuaVec2 to Vec2 with optionally None
-                    let position: LuaVec2 = t.get("position")?;
-
-                    // BUG: this is Nil
-                    //let text_offset: LuaVec2 = t.get("text_offset")
-                    //    .unwrap_or(LuaVec2(Vec2::new(0.0, 0.0)));
-
                     let text_offset = glam::Vec2::new(0.0, 0.0);
-
                     Widget::Circle {
-                        position: position.0,
+                        position: lua.from_value(t.get("position")?)?,
                         text_offset: text_offset,
-                        text: t.get("text").ok(),
+                        text: t.get("text")?,
                     }
                 }
                 "segment" => {
-                    let from: LuaVec2 = t.get("from")?;
-                    let to: LuaVec2 = t.get("to")?;
-
                     Widget::Segment {
-                        from: from.0,
-                        to: to.0,
+                        from: lua.from_value(t.get("from")?)?,
+                        to: lua.from_value(t.get("to")?)?,
                     }
                 }
                 "hline" => Widget::HLine { y: t.get("y")? },
