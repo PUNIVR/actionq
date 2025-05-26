@@ -63,3 +63,91 @@ pub struct CaptureData {
     pub frame: Vec<u8>,
     pub pose: Pose,
 }
+
+/// Describe an exercise request
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "PascalCase")]
+pub struct JetsonExerciseRequest {
+    /// Overwrites default parameters of the exercise
+    pub parameters: Option<HashMap<String, f32>>,
+    /// Number of repetitions to do to consider this exercise completed
+    pub num_repetitions: u32,
+    /// Id of the exercise
+    pub exercise_id: String,
+}
+
+/// Possible requests for the Jetson
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "Type", rename_all_fields = "PascalCase")]
+pub enum JetsonRequest {
+    /// Starts a new session, if one is already in progress then connect to that
+    /// session without starting a new one
+    SessionStart {
+        /// The exercises that must be completed in this session, they are in order of execution
+        exercises: Vec<JetsonExerciseRequest>,
+        /// True if the engine should save the exercise execution log into the database
+        /// at the end of this session
+        save: bool
+    },
+    /// Pause and Resume current exercise running
+    SetPlayState { running: bool },
+    /// End the current session in progress
+    SessionEnd,
+    /// Close all connections
+    CloseAll,
+}
+
+/// Possible responses of the Jetson
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all_fields = "PascalCase")]
+pub enum JetsonResponse { }
+
+/// Contains all objects used only in the database
+pub mod firebase {
+    use super::{JetsonRequest, JetsonResponse};
+    use serde::{Serialize, Deserialize};
+
+    /// Descriptor of an exercise
+    /// NOTE: The default parameters are not included, are they are present in the FSM script
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    pub struct ExerciseTemplate {
+        /// Id of the exercise
+        pub name: String,
+        /// Description of the exercise
+        pub description: String,
+        /// Code of the FSM running the exercise
+        pub fsm: String,
+    }
+
+    /// Jetson interface to handle events and errors
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    pub struct JetsonInterface {
+        /// Buffer where requests are written by the clients
+        pub request: Option<JetsonRequest>,
+        /// Buffer where responses are written by the jetson
+        pub response: Option<JetsonResponse>
+    }
+
+    /// Descriptor of completed session of exercises
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    pub struct SessionStore {
+        /// Exercises to do during the session
+        pub exercises: Vec<ExerciseStore>,
+        /// When the session was completed
+        pub timestamp: String,
+
+    }
+
+    /// Descriptor of a completed exercise
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    pub struct ExerciseStore {
+        /// Number of repetitions completed
+        pub num_repetitions_done: u32,
+        /// Id of the exercise
+        pub exercise: String,
+    }
+}

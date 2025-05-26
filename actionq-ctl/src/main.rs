@@ -54,9 +54,6 @@ enum CmdsDatabase {
         description: String,
         /// Path to the fsm json file
         fsm: String,
-        /// URI to the gif of the exercise.
-        /// Example: gs://uvc-unisco.appspot.com/gif.webp
-        gif: String,
     },
 }
 
@@ -119,7 +116,6 @@ fn main() {
                     name,
                     description,
                     fsm,
-                    gif,
                 } => {
                     let fsm_data =
                         std::fs::read_to_string(&fsm).expect("unable to read fsm file");
@@ -130,7 +126,7 @@ fn main() {
 
                     sync_async!(
                         rt,
-                        ctrl.add_exercise_definition(&name, &description, &fsm_data, &gif, Vec::from_iter(exercise.default_parameters))
+                        ctrl.add_exercise_definition(&name, &description, &fsm_data, Vec::from_iter(exercise.default_parameters))
                             .await
                     );
                 }

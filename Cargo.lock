@@ -120,6 +120,7 @@ dependencies = [
 name = "actionq-ctl"
 version = "0.1.0"
 dependencies = [
+ "actionq-common",
  "actionq-motion",
  "clap",
  "firestore",

@@ -7,8 +7,8 @@ use firestore::{
 use actionq_motion::ParameterDescriptor;
 use actionq_common::{
     JetsonRequest, JetsonExerciseRequest,
-    firestore::{
-        ExerciseTemplate
+    firebase::{
+        JetsonInterface, ExerciseTemplate
     }
 };
 
@@ -18,32 +18,6 @@ macro_rules! sync_async {
     ($rt:expr, $f:expr) => {
         $rt.block_on(async { $f })
     };
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Document {
-    request: Command,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ExerciseReps {
-    exercise_id: String,
-    num_repetitions: u32,
-    /// Optional runtime parameters
-    parameters: Option<HashMap<String, f32>>
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type")]
-enum Command {
-    SessionStart {
-        exercises: Vec<ExerciseReps>,
-        save: bool,
-    },
-    SetPlayState {
-        running: bool,
-    },
-    SessionEnd,
 }
 
 // Control the session of a patient
@@ -64,15 +38,17 @@ impl SessionCtrl {
     }
 
     /// Modify the command document
-    async fn update_command(&self, request: Command) {
-        let _: Document = self
+    async fn update_command(&self, request: JetsonRequest) {
+        let _: JetsonInterface = self
             .db
             .fluent()
             .update()
-            .fields(paths!(Document::request))
             .in_col("jetson")
             .document_id(&self.patient_id)
-            .object(&Document { request })
+            .object(&JetsonInterface {
+                request: Some(request),
+                response: None,
+            })
             .execute()
             .await
             .unwrap();
@@ -80,15 +56,15 @@ impl SessionCtrl {
 
     /// Stop an exercise
     pub async fn set_play_state(&self, running: bool) {
-        self.update_command(Command::SetPlayState { running }).await;
+        self.update_command(JetsonRequest::SetPlayState { running }).await;
     }
 
     // Run single exercise
     pub async fn run_exercise(&self, exercise_id: String, num_repetitions: u32, parameters: Option<HashMap<String, f32>>) {
-        self.update_command(Command::SessionStart { 
+        self.update_command(JetsonRequest::SessionStart { 
             save: false, 
             exercises: vec![
-                ExerciseReps {
+                JetsonExerciseRequest {
                     exercise_id, num_repetitions, parameters
                 }
             ]
@@ -97,24 +73,17 @@ impl SessionCtrl {
 
     // Stop a session
     pub async fn session_stop(&self) {
-        self.update_command(Command::SessionEnd).await;
+        self.update_command(JetsonRequest::SessionEnd).await;
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ExerciseParameter {
-    name: String,
-    description: String,
-    default: f32
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Exercise {
-    name: String,
-    description: String,
+#[serde(rename_all = "PascalCase")]
+struct ExerciseTemplateExt {
+    #[serde(flatten)]
+    template: ExerciseTemplate,
+    /// Extracted default parameters
     parameters: Vec<ParameterDescriptor>,
-    gif: String,
-    fsm: String,
 }
 
 // Interact with the database
@@ -138,14 +107,14 @@ impl DatabaseCtrl {
         name: &str,
         description: &str,
         fsm: &str,
-        gif_uri: &str,
         parameters: Vec<ParameterDescriptor>
     ) {
-        let obj = Exercise {
-            name: name.into(),
-            description: description.into(),
-            fsm: fsm.into(),
-            gif: gif_uri.into(),
+        let obj = ExerciseTemplateExt {
+            template: ExerciseTemplate {
+                name: name.into(),
+                description: description.into(),
+                fsm: fsm.into(),
+            },
             parameters
         };
 
@@ -160,7 +129,7 @@ impl DatabaseCtrl {
             .await;
 
         // Insert new
-        let _: Exercise = self
+        let _: ExerciseTemplateExt = self
             .db
             .fluent()
             .insert()
