@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use firestore::{
     paths, FirestoreDb, FirestoreListenerTarget, FirestoreTempFilesListenStateStorage,
 };
+use uuid::Uuid;
 
 use actionq_motion::ParameterDescriptor;
 use actionq_common::{
-    JetsonRequest, JetsonExerciseRequest,
+    JetsonRequest, JetsonRequestWrap, JetsonExerciseRequest,
     firebase::{
         JetsonInterface, ExerciseTemplate
     }
@@ -39,6 +40,7 @@ impl SessionCtrl {
 
     /// Modify the command document
     async fn update_command(&self, request: JetsonRequest) {
+        let dedup_id: String = format!("{}", Uuid::new_v4()); 
         let _: JetsonInterface = self
             .db
             .fluent()
@@ -46,7 +48,10 @@ impl SessionCtrl {
             .in_col("jetson")
             .document_id(&self.patient_id)
             .object(&JetsonInterface {
-                request: Some(request),
+                request: Some(JetsonRequestWrap {
+                    inner: request,
+                    dedup_id
+                }),
                 response: None,
             })
             .execute()

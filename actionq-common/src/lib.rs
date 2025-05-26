@@ -76,6 +76,15 @@ pub struct JetsonExerciseRequest {
     pub exercise_id: String,
 }
 
+/// Wrapper for a Jetson request with an unique Id to prevent idempotency removal of events
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "Type", rename_all = "PascalCase")]
+pub struct JetsonRequestWrap {
+    #[serde(flatten)]
+    pub inner: JetsonRequest,
+    pub dedup_id: String,
+}
+
 /// Possible requests for the Jetson
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "Type", rename_all_fields = "PascalCase")]
@@ -104,7 +113,7 @@ pub enum JetsonResponse { }
 
 /// Contains all objects used only in the database
 pub mod firebase {
-    use super::{JetsonRequest, JetsonResponse};
+    use super::{JetsonRequestWrap, JetsonResponse};
     use serde::{Serialize, Deserialize};
 
     /// Descriptor of an exercise
@@ -125,7 +134,7 @@ pub mod firebase {
     #[serde(rename_all = "PascalCase")]
     pub struct JetsonInterface {
         /// Buffer where requests are written by the clients
-        pub request: Option<JetsonRequest>,
+        pub request: Option<JetsonRequestWrap>,
         /// Buffer where responses are written by the jetson
         pub response: Option<JetsonResponse>
     }

@@ -12,3 +12,4 @@ firestore = "0.43.1"
 
 actionq-motion = { path = "../actionq-motion" }
 actionq-common = { path = "../actionq-common" }
+uuid = { version = "1.17.0", features = ["v4"] }
