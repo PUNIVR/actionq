@@ -5,6 +5,12 @@ use firestore::{
 };
 
 use actionq_motion::ParameterDescriptor;
+use actionq_common::{
+    JetsonRequest, JetsonExerciseRequest,
+    firestore::{
+        ExerciseTemplate
+    }
+};
 
 // Run an async block in place
 #[macro_export]

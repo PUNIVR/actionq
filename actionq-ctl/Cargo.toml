@@ -11,3 +11,4 @@ clap = { version = "4.5.20", features = ["derive"] }
 firestore = "0.43.1"
 
 actionq-motion = { path = "../actionq-motion" }
+actionq-common = { path = "../actionq-common" }
