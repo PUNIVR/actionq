@@ -1,0 +1,244 @@
+
+// Required to draw on the stream video
+const streamSection = document.getElementById("streamSection");
+const canvas = document.getElementById("streamCanvas");
+const ctx = canvas.getContext("2d");
+
+// Reference video
+const referenceVideo = document.getElementById("referenceVideo");
+
+// Repetition counter
+const repCounter = document.getElementById("repCounter");
+
+// Overlay between exercises
+const overlay = document.getElementById("overlay");
+
+var currentExerciseId = null;
+var currentRepetitionTarget = 0;
+var currentWidgets = [];
+
+var currentAudioSrc = null;
+var currentAudio = null;
+var audioDelayTimeout = null;
+
+function handleExerciseStart(msg) {
+    currentRepetitionTarget = msg.repetitions_target;
+    currentExerciseId = msg.exercise_id;
+
+    // Play video
+    if (msg.exercise_id !== undefined) {
+        const newSrc = `exercises/${msg.exercise_id}/reference.mp4`;
+        if (referenceVideo.src !== new URL(newSrc, window.location.href).href) {
+            referenceVideo.pause();
+            referenceVideo.src = newSrc;
+            referenceVideo.load();
+            referenceVideo.play()
+                .catch(e => console.warn("Reference video play error:", e));
+        }
+    }
+}
+
+function remapCoords(position) {
+    return [
+        position[0] / 640 * 1280,
+        position[1] / 480 * 720
+    ];
+}
+
+function drawWidgets() {
+    var rect = streamSection.getBoundingClientRect();
+    currentWidgets.forEach((widget, index) => {
+        ctx.save();
+
+        ctx.strokeStyle = 'white';
+        ctx.fillStyle = 'white';
+        ctx.lineWidth = 4;
+
+        for (const [type, data] of Object.entries(widget)) {
+            switch (type) {
+                case "Circle":
+                    var position = remapCoords(data.position);
+                    
+                    ctx.beginPath();
+                    ctx.arc(position[0], position[1], 10.0, 0, Math.PI * 2);
+                    ctx.stroke();
+                    break;
+
+                case "Segment":
+                    var from = remapCoords(data.from);
+                    var to = remapCoords(data.to);
+
+                    ctx.beginPath();
+                    ctx.moveTo(from[0], from[1]);
+                    ctx.lineTo(to[0], to[1]);
+                    ctx.stroke();
+                    break;
+
+                /*
+                case "Arc":
+                    var center = remapCoords(data.center);
+                    
+                    ctx.beginPath();
+                    ctx.arc(center[0], center[1], data.radius, data.from % 360, data.to % 360);
+                    ctx.stroke();
+                    break;
+                */
+
+                case "HLine":
+                    var y = data.y / 480 * 720;
+
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(rect.right, y);
+                    ctx.stroke();
+                    break
+
+                case "VLine":
+                    var x = data.x / 640 * 1280;
+
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, rect.bottom);
+                    ctx.stroke();
+                    break
+
+                default:
+                    //console.warn("Unknown widget type:", type);
+                    break;
+            }
+        }
+        ctx.restore();
+    });
+
+    requestAnimationFrame(drawWidgets);
+}
+
+function stopAudio() {
+
+    // Clear any pending
+    if (audioDelayTimeout) {
+        clearTimeout(audioDelayTimeout);
+        audioDelayTimeout = null;
+    }
+
+    // Stop and clean up old audio
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.src = "";
+        currentAudio = null;
+        currentAudioSrc = null;
+    }
+}
+
+function playAudio(relativeNewSrc, delay = 1250) {
+    // If same audio is already playing, do nothing
+    const newSrc = `exercises/${currentExerciseId}/audio/${relativeNewSrc}`;
+    if (newSrc === currentAudioSrc) {
+        return;
+    }
+
+    stopAudio();
+
+    // No new audio
+    if (relativeNewSrc === null) return;
+
+    // Start audio at the end of the timeout
+    //console.log(`Audio "${newSrc}" requested to play`);
+    currentAudioSrc = newSrc;
+    audioDelayTimeout = setTimeout(() => {
+        
+        audio = new Audio(newSrc);
+        audio.volume = 1.0;
+        audio.loop = false;
+        audio.play()
+            .catch(e => console.warn("Audio play error:", e));
+
+        currentAudio = audio;
+        audioDelayTimeout = null;
+
+        //console.log(`Audio "${newSrc}" is playing`);
+    }, delay);
+}
+
+function handleExerciseUpdate(msg) {
+
+    // If it contains a frame, display it
+    if (msg.frame) {
+        const byteArray = new Uint8Array(msg.frame);
+        const blob = new Blob([byteArray], { type: 'image/jpeg' });
+        const url = URL.createObjectURL(blob);
+
+        const img = new Image();
+        img.src = url;
+
+        img.onload = () => {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(url);
+        };
+    }
+
+    // If it contains a repetition count, update it
+    if (msg.repetitions !== undefined) {
+        repCounter.textContent = `Ripetizioni: ${msg.repetitions} / ${currentRepetitionTarget}`;
+    }
+
+    // If it contains metadata, use it
+    if (msg.metadata) {
+        if (msg.metadata.help !== undefined) {
+            helpText.textContent = msg.metadata.help;
+        }
+        if (msg.metadata.widgets !== undefined) {
+            currentWidgets = msg.metadata.widgets;
+        }
+        if (msg.metadata.audio !== undefined) {
+            playAudio(msg.metadata.audio);
+        }
+    }
+}
+
+function showHomepage() {
+    overlay.textContent = "ActionQ";
+    overlay.classList.add("show");
+}
+
+function hideHomepage() {
+    overlay.classList.remove("show");
+}
+
+function showOverlay(text) {
+    overlay.textContent = text;
+    overlay.classList.add("show");
+    setTimeout(() => {
+        overlay.classList.remove("show");
+    }, 1500);
+}
+
+function handleExerciseEnd(msg) {
+    showOverlay("Ottimo!");
+    stopAudio();
+}
+
+// Start with the homepage
+showHomepage();
+
+// Connect to the ActionQ server
+const socket = new WebSocket("ws://127.0.0.1:8080");
+socket.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    //console.log(msg);
+
+    switch (msg.type) {
+        case "SessionStart": hideHomepage(); break;
+        case "ExerciseStart": handleExerciseStart(msg); break;
+        case "ExerciseUpdate": handleExerciseUpdate(msg); break;
+        case "ExerciseEnd": handleExerciseEnd(msg); break;
+        case "SessionEnd": showHomepage(); break;
+    }
+};
+
+// Draw widgets
+requestAnimationFrame(drawWidgets);
+
+socket.onopen = () => console.log("Connected to WebSocket server");
+socket.onerror = (error) => console.error("WebSocket Error:", error);
+socket.onclose = () => console.log("WebSocket Disconnected");

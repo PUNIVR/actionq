@@ -1,0 +1,139 @@
+:root {
+    --scale-factor: 1.2;
+}
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    font-family: monospace;
+    background-image: url("background.svg");
+    background-repeat:no-repeat;
+    background-position:center;
+    background-size:cover;
+}
+
+.center-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: auto;
+}
+
+.scaler {
+    transform: scale(var(--scale-factor));
+    transform-origin: center;
+}
+
+.container {
+    width: calc(1280px + 480px + 40px);
+    border: 2px solid black;
+    border-radius: 10px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    background-color: #495057;
+}
+
+.help-text {
+    border: 2px solid black;
+    background-color: #495057;
+    background: repeating-linear-gradient(45deg,
+            #f8d7da,
+            #f8d7da 10px,
+            #fff 10px,
+            #fff 20px);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 10px;
+    text-align: center;
+    height: 6vh;
+    font-size: 4em;
+}
+
+.main-content {
+    display: flex;
+    gap: 10px;
+}
+
+.stream-section {
+    width: 1280px;
+    height: 720px;
+    position: relative;
+    border: 2px solid black;
+    border-radius: 10px;
+    background-color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+#videoCanvas {
+    width: 1280px;
+    height: 720px;
+}
+
+.repetitions {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    border: 2px solid black;
+    border-radius: 10px;
+    background-color: #495057;
+    background: repeating-linear-gradient(45deg,
+            #f8d7da,
+            #f8d7da 10px,
+            #fff 10px,
+            #fff 20px);
+    padding: 10px;
+    z-index: 10;
+    font-size: 4em;
+}
+
+.reference-video {
+    width: 480px;
+    height: 720px;
+    border: 2px solid black;
+    border-radius: 10px;
+    background-color: #495057;
+    background: repeating-linear-gradient(45deg,
+            #d1ecf1,
+            #d1ecf1 10px,
+            #fff 10px,
+            #fff 20px);
+    padding: 20px;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.label {
+    font-size: 1.6em;
+}
+
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #495057;
+    color: white;
+    font-size: 12em;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 9999;
+    transition: opacity 0.2s ease;
+}
+
+.overlay.show {
+    opacity: 1;
+}
