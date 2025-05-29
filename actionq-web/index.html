@@ -1,31 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap"
+        rel="stylesheet">
     <title>ActionQ</title>
 </head>
+
 <body>
-    <div class="scaler center-wrapper">
-        <div class="container">
-            <div class="overlay" id="overlay"></div>
-            <div class="help-text" id="helpText">Help text</div>
-            <div class="main-content">
-                <div class="stream-section", id="streamSection">
-                    <div class="repetitions" id="repCounter">Ripetizioni: 0</div>
-                    <canvas width="1280" height="720" id="streamCanvas"></canvas>
+    <div class="overlay" id="overlayExercise">
+        <p class="text-exercise-overlay archivo-black-regular" id="overlayExerciseText">Ottimo!</p>
+        <div class="overlay-slider-container">
+            <div class="slider" id="exerciseSlider">Esercizi</div>
+        </div>
+    </div>
+    <div class="overlay" id="overlayHomepage">
+        <p class="text-logo archivo-black-regular">ActionQ</p>
+    </div>
+    <div class="flex-background">
+        <div class="content">
+            <div class="header open-sans">
+                <p id="helpText">Abbassa il ginocchio!</p>
+            </div>
+            <div class="main">
+                <div class="video-stream">
+                    <canvas class="stream" width="1280" height="720" id="streamCanvas"></canvas>
+                    <div class="slider-container">
+                        <div class="slider open-sans" id="repSlider">RIPETIZIONI</div>
+                    </div>
+                    <div class="exercises open-sans" id="exerciseCounter">ESERCIZI</div>
                 </div>
-                <div class="reference-video">
+                <div class="video-reference">
                     <video
                         id="referenceVideo"
-                        controls
                         autoplay
                         muted
                         loop
                         playsinline
-                        width="480px" height="720"
-                        style="width: 100%; height: 100%; object-fit: cover; border-radius: 10px;"
+                        width="480px" 
+                        height="720"
                     ></video>
                 </div>
             </div>

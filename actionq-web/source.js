@@ -1,17 +1,27 @@
 
 // Required to draw on the stream video
-const streamSection = document.getElementById("streamSection");
 const canvas = document.getElementById("streamCanvas");
 const ctx = canvas.getContext("2d");
 
 // Reference video
 const referenceVideo = document.getElementById("referenceVideo");
 
-// Repetition counter
-const repCounter = document.getElementById("repCounter");
+// Repetition slider and text
+const repSlider = document.getElementById("repSlider");
+
+// Set current exercise text
+const exerciseCounter = document.getElementById("exerciseCounter");
+const exerciseSlider = document.getElementById("exerciseSlider");
 
 // Overlay between exercises
-const overlay = document.getElementById("overlay");
+const overlayExerciseText = document.getElementById("overlayExerciseText")
+const overlayExercise = document.getElementById("overlayExercise");
+
+// Overlay of the homepage
+const overlayHomepage = document.getElementById("overlayHomepage");
+
+var sessionExercisesCount = 0;
+var sessionExerciseNum = 0;
 
 var currentExerciseId = null;
 var currentRepetitionTarget = 0;
@@ -22,8 +32,12 @@ var currentAudio = null;
 var audioDelayTimeout = null;
 
 function handleExerciseStart(msg) {
+
     currentRepetitionTarget = msg.repetitions_target;
     currentExerciseId = msg.exercise_id;
+
+    sessionExerciseNum += 1;
+    exerciseCounter.textContent = `Esercizio ${sessionExerciseNum} / ${sessionExercisesCount}`;
 
     // Play video
     if (msg.exercise_id !== undefined) {
@@ -46,7 +60,7 @@ function remapCoords(position) {
 }
 
 function drawWidgets() {
-    var rect = streamSection.getBoundingClientRect();
+    var rect = canvas.getBoundingClientRect();
     currentWidgets.forEach((widget, index) => {
         ctx.save();
 
@@ -58,7 +72,7 @@ function drawWidgets() {
             switch (type) {
                 case "Circle":
                     var position = remapCoords(data.position);
-                    
+
                     ctx.beginPath();
                     ctx.arc(position[0], position[1], 10.0, 0, Math.PI * 2);
                     ctx.stroke();
@@ -146,7 +160,7 @@ function playAudio(relativeNewSrc, delay = 1250) {
     //console.log(`Audio "${newSrc}" requested to play`);
     currentAudioSrc = newSrc;
     audioDelayTimeout = setTimeout(() => {
-        
+
         audio = new Audio(newSrc);
         audio.volume = 1.0;
         audio.loop = false;
@@ -179,7 +193,9 @@ function handleExerciseUpdate(msg) {
 
     // If it contains a repetition count, update it
     if (msg.repetitions !== undefined) {
-        repCounter.textContent = `Ripetizioni: ${msg.repetitions} / ${currentRepetitionTarget}`;
+        var repPercentage = 80.0 / currentRepetitionTarget * msg.repetitions;
+        repSlider.style.width = `${20 + repPercentage}%`;
+        repSlider.textContent = `${msg.repetitions} / ${currentRepetitionTarget}`;
     }
 
     // If it contains metadata, use it
@@ -197,25 +213,40 @@ function handleExerciseUpdate(msg) {
 }
 
 function showHomepage() {
-    overlay.textContent = "ActionQ";
-    overlay.classList.add("show");
+    overlayHomepage.style.opacity = 100;
 }
 
 function hideHomepage() {
-    overlay.classList.remove("show");
+    overlayHomepage.style.opacity = 0;
 }
 
-function showOverlay(text) {
-    overlay.textContent = text;
-    overlay.classList.add("show");
+function showOverlay(text, duration = 2500) {
+
+    overlayExerciseText.textContent = text;
+    overlayExercise.style.opacity = 100;
+
     setTimeout(() => {
-        overlay.classList.remove("show");
-    }, 1500);
+        overlayExercise.style.opacity = 0;
+    }, duration);
+
+    // Increase exercise bar
+    var sliderPercentage = 80.0 / sessionExercisesCount * sessionExerciseNum;
+    setTimeout(() => {
+        exerciseSlider.style.width = `${20 + sliderPercentage}%`; 
+    }, 1000);
 }
 
 function handleExerciseEnd(msg) {
     showOverlay("Ottimo!");
     stopAudio();
+}
+
+function handleSessionStart(msg) {
+
+    sessionExercisesCount = msg.exercises_count;
+    sessionExerciseNum = 0;
+
+    hideHomepage();
 }
 
 // Start with the homepage
@@ -228,7 +259,7 @@ socket.onmessage = (event) => {
     //console.log(msg);
 
     switch (msg.type) {
-        case "SessionStart": hideHomepage(); break;
+        case "SessionStart": handleSessionStart(msg); break;
         case "ExerciseStart": handleExerciseStart(msg); break;
         case "ExerciseUpdate": handleExerciseUpdate(msg); break;
         case "ExerciseEnd": handleExerciseEnd(msg); break;
