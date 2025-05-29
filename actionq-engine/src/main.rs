@@ -35,43 +35,27 @@ fn setup_tracing() {
         .init();                                // sets this to be the default, global collector for this application.
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
    
     let cli = Cli::parse();
-
     setup_tracing();
-
-    //let fsm = exercise::JsonExercise::simple();
-    //let fsm_string = serde_json::to_string(&fsm);
-    //println!("{:?}", fsm_string);
-    //return Ok(());
 
     // Channel for UI messages
     let (ui_tx, ui_rx) = tokio::sync::mpsc::channel(100);
     let ui_proxy = ui::UiProxy(ui_tx);
+    ui::run_ui_client(ui_rx);
 
     // Channel for firebase messages
-    let (firebase_tx, mut firebase_rx) = tokio::sync::mpsc::channel(100);
+    let (firebase_tx, firebase_rx) = tokio::sync::mpsc::channel(100);
     let firebase = FirebaseProxy(firebase_tx);
+    
+    let (pose, pose_receiver) = pose::run_human_pose_estimator();
+    let session = session::run_session(&pose, pose_receiver, ui_proxy, firebase);
+    
+    // This is the control interface of the system
+    firebase::listen_commands(&cli.user_id, &cli.project_id, session, firebase_rx)
+        .await;
 
-    // Move the tokio runtime to a different thread
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().expect("Unable to create Runtime");
-        let rt_enter = rt.enter();
-        rt.block_on(async {
-
-            let (pose, pose_receiver) = pose::run_human_pose_estimator();
-            let session = session::run_session(&pose, pose_receiver, ui_proxy, firebase);
-
-            // This is the control interface of the system
-            firebase::listen_commands(&cli.user_id, &cli.project_id, session, firebase_rx)
-                .await;
-
-            //let server = network::run_websocket_server("0.0.0.0:3666", &session, &pose)
-            //    .await.expect("Server - error");
-        });
-    });
-
-    ui::run_ui_blocking(ui_rx);
     Ok(())
 }

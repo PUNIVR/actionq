@@ -7,6 +7,10 @@ use uuid::Uuid;
 use crate::session::SessionProxy;
 use crate::common::{Request, RequestExerciseReps};
 
+use actionq_common::firebase::*;
+use actionq_common::*;
+
+/*
 /// Data definitions inside of firebase
 /// we use TitleCase
 pub mod model {
@@ -53,6 +57,7 @@ pub mod model {
         pub Timestamp: String
     }
 }
+*/
 
 /// Utility struct to interact with the firestore database
 struct Firestore {
@@ -71,7 +76,7 @@ impl Firestore {
     }
 
     /// Get an exercise by it's Id
-    pub async fn get_exercise(&self, exercise_id: &str) -> Option<model::Exercise> {
+    pub async fn get_exercise(&self, exercise_id: &str) -> Option<ExerciseTemplate> {
         self.db.fluent().select()
             .by_id_in("exercises")
             .obj()
@@ -79,6 +84,7 @@ impl Firestore {
             .await.unwrap()
     }
 
+    /*
     /// Set the state of the Jetson
     pub async fn set_jeston_state(&self, state: model::JetsonState) {
         let object = model::JetsonInterface { state, request: None };
@@ -90,12 +96,13 @@ impl Firestore {
             .execute::<model::JetsonInterface>()
             .await.unwrap();
     }
+    */
 
     /// Stora a new session for the patient
-    pub async fn store_session(&self, session: model::Session) {
+    pub async fn store_session(&self, session: SessionStore) {
         let id = format!("{}", Uuid::new_v4());
         let parent_path = self.db.parent_path("patients", self.patient_id.clone()).unwrap();
-        let _: model::Session = self.db.fluent().insert()
+        let _: SessionStore = self.db.fluent().insert()
             .into("exercise_sessions")
             .document_id(&id)
             .parent(&parent_path)
@@ -109,19 +116,19 @@ impl Firestore {
 #[derive(Debug)]
 pub enum FirebaseCommand {
     GetExerciseDefinition {
-        respond_to: tokio::sync::oneshot::Sender<Option<model::Exercise>>,
+        respond_to: tokio::sync::oneshot::Sender<Option<ExerciseTemplate>>,
         /// Id of the requested exercise
         exercise_id: String
     },
     StoreSession {
-        session: model::Session 
+        session: SessionStore
     }
 }
 
 #[derive(Debug)]
 pub struct FirebaseProxy(pub tokio::sync::mpsc::Sender<FirebaseCommand>);
 impl FirebaseProxy {
-    pub async fn get_exercise(&self, exercise_id: &str) -> Option<model::Exercise> {
+    pub async fn get_exercise(&self, exercise_id: &str) -> Option<ExerciseTemplate> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.0.send(FirebaseCommand::GetExerciseDefinition {
             respond_to: tx, exercise_id: exercise_id.to_owned()
@@ -129,7 +136,7 @@ impl FirebaseProxy {
         rx.await.unwrap()
     }
 
-    pub async fn store_session(&self, session: model::Session) {
+    pub async fn store_session(&self, session: SessionStore) {
         self.0.send(FirebaseCommand::StoreSession { session }).await
             .unwrap();
     }
@@ -143,7 +150,7 @@ async fn on_event(event: FirestoreListenEvent, session: SessionProxy) {
             if let Some(doc) = &doc_change.document {
 
                 // Try deserialize the document into a command
-                let doc = match FirestoreDb::deserialize_doc_to::<model::JetsonInterface>(doc) {
+                let doc = match FirestoreDb::deserialize_doc_to::<JetsonInterface>(doc) {
                     Ok(doc) => doc,
                     Err(e) => {
                         tracing::error!("cannot deserialize request: {}", e);
@@ -155,16 +162,16 @@ async fn on_event(event: FirestoreListenEvent, session: SessionProxy) {
 
                 // Send request to session
                 if let Some(request) = doc.request {
-                    match request {
-                        Request::SessionStart { exercises, save } => {
+                    match request.inner {
+                        JetsonRequest::SessionStart { patient_id, exercises, save } => {
                             tracing::info!("request: session start");
                             session.session_start(exercises, save).await;
                         }
-                        Request::SessionEnd => {
+                        JetsonRequest::SessionEnd => {
                             tracing::info!("request: session end");
                             session.session_end().await;
                         },
-                        Request::SetPlayState { running } => {
+                        JetsonRequest::SetPlayState { running } => {
                             tracing::info!("request: set play state (running -> {})", running);
                             session.set_play_state(running).await;
                         },
@@ -188,8 +195,8 @@ pub async fn listen_commands(patient_id: &str, database_id: &str, session: Sessi
 
     // Add commands document for the patient
     tracing::info!("reseting commands document for patient");
-    let doc = model::JetsonInterface { request: Some(Request::SessionEnd), state: model::JetsonState::Listening };
-    let doc_res: model::JetsonInterface = firestore.db.fluent().update().in_col("jetson")
+    let doc = JetsonInterface { request: None, response: None };
+    let _: JetsonInterface = firestore.db.fluent().update().in_col("jetson")
         .document_id(&patient_id).object(&doc)
         .execute().await.expect("unable to add patient's command document");
 
@@ -201,10 +208,12 @@ pub async fn listen_commands(patient_id: &str, database_id: &str, session: Sessi
     firestore.db.fluent().select().by_id_in("jetson").batch_listen([patient_id])
         .add_target(FirestoreListenerTarget::new(78), &mut listener)
         .expect("unable to attach listener to commands of patient");
-    
+   
+    /*
     // Notify that we are listening for commands
     tracing::info!("setting jetson state to 'listening'");
     firestore.set_jeston_state(model::JetsonState::Listening).await;
+    */
 
     // Start background listener as a tokio task
     listener.start(move |event| {
@@ -231,9 +240,11 @@ pub async fn listen_commands(patient_id: &str, database_id: &str, session: Sessi
         }
     }
 
+    /*
     // Notify that we stoppend listening for commands
     tracing::info!("setting jetson state to 'offline'");
     firestore.set_jeston_state(model::JetsonState::Offline).await;
     listener.shutdown().await
         .expect("unable to shutdown listener");
+    */
 }

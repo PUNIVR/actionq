@@ -1,16 +1,11 @@
 #![allow(dead_code)]
 
-use eframe::{egui, App, NativeOptions};
-use egui::{
-    Align2, Button, Color32, FontFamily, FontId, Pos2, Rangef, Rect, Stroke, TextureOptions, Ui,
-};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{Receiver, Sender};
-use webp_animation::prelude::*;
 
-use actionq_common::{CaptureData, Skeleton2D};
-use actionq_motion::{LuaExercise, StateEvent, StateOutput, StateWarning, Widget};
+use actionq_common::*;
+use actionq_motion::{LuaExercise, StateEvent, StateOutput, StateWarning, Widget, Metadata};
 
 /// Contains all commands understood by the ui
 #[derive(Debug, Serialize, Deserialize)]
@@ -56,37 +51,19 @@ impl UiProxy {
     }
 }
 
-impl App for MyUi {
-    #[tracing::instrument(skip_all, fields(cmd))]
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+struct UiClient {}
+impl UiClient {
+    #[tracing::instrument(skip_all)]
+    pub async fn run_ui_client(self, mut rx: Receiver<Command>) {
         // Get new messages if available
-        if let Ok(cmd) = self.cmds.try_recv() {
+        if let Some(cmd) = rx.recv().await {
             // Forward to websocket
+            // TODO
         }
     }
 }
 
-pub fn run_ui_blocking(rx: Receiver<Command>) {
-    eframe::run_native(
-        "ActionQ",
-        eframe_options(),
-        Box::new(|cc| {
-            egui_extras::install_image_loaders(&cc.egui_ctx);
-
-            // static background image for now
-            let image = egui::ColorImage::new([1280, 720], Color32::from_gray(0));
-
-            Ok(Box::new(MyUi {
-                is_running: false,
-                repetition_count: 0,
-                cmds: rx,
-                exercise_gif: None,
-                current_frame: Some(image),
-                widgets: vec![],
-                keypoints: vec![],
-                help_text: None,
-            }))
-        }),
-    )
-    .expect("Unable to run eframe");
+pub fn run_ui_client(rx: Receiver<Command>) {
+    let client = UiClient { };
+    tokio::spawn(client.run_ui_client(rx));
 }

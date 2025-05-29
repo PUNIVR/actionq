@@ -7,18 +7,18 @@ use std::fs;
 use std::ops::Deref;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-use crate::common::RequestExerciseReps;
-use crate::firebase::model;
 use crate::firebase::FirebaseProxy;
 use crate::pose::{PoseEventSender, PoseEventSink, PoseProxy};
 use crate::ui::UiProxy;
 
+use crate::ui;
 use actionq_common::*;
+use actionq_common::firebase::*;
 use actionq_motion::{LuaExercise, StateEvent, StateOutput, StateWarning};
 
 pub enum Command {
     SessionStart {
-        exercises: Vec<RequestExerciseReps>,
+        exercises: Vec<JetsonExerciseRequest>,
         save: bool,
     },
     SetPlayState {
@@ -112,13 +112,14 @@ impl SessionState {
     }
 }
 
+/*
 /// Convert a LuaExercise into a Firestore SessionExercise
-impl From<&LuaExercise> for model::SessionExercise {
+impl From<&LuaExercise> for ExerciseStore {
     fn from(other: &LuaExercise) -> Self {
         Self {
-            Exercise: other.name.clone(),
-            ExerciseTimestamp: String::new(),
-            NumRepetitionsDone: other.repetitions,
+            exercise: other.name.clone(),
+            num_repetitions_done: other.repetitions,
+            /*
             Poses: other
                 .frames
                 .iter()
@@ -128,23 +129,27 @@ impl From<&LuaExercise> for model::SessionExercise {
                     Keypoints: sk.iter().map(|(k, v)| (k.clone(), (v.x, v.y))).collect(),
                 })
                 .collect(),
+            */
         }
     }
 }
+*/
 
+/*
 /// Convert a SessionState to a Firestore Session
-impl From<&SessionState> for model::Session {
+impl From<&SessionState> for SessionStore {
     fn from(other: &SessionState) -> Self {
         Self {
-            Timestamp: String::new(),
-            Exercises: other
+            timestamp: String::new(),
+            exercises: other
                 .exercises
                 .iter()
-                .map(model::SessionExercise::from)
+                .map(ExerciseStore::from)
                 .collect(),
         }
     }
 }
+*/
 
 #[derive(Debug)]
 struct Session {
@@ -163,8 +168,6 @@ struct Session {
     ui: UiProxy,
     /// Proxy to command the firebase database
     firebase: FirebaseProxy,
-    // Broadcast the pose analysis, useful in future for more developed UIs
-    //_data_sender: broadcast::Sender<SessionPoseData>,
 }
 
 #[derive(Clone, Debug)]
@@ -180,7 +183,7 @@ impl SessionProxy {
     //    rx.await.unwrap()
     //}
 
-    pub async fn session_start(&self, exercises: Vec<RequestExerciseReps>, save: bool) {
+    pub async fn session_start(&self, exercises: Vec<JetsonExerciseRequest>, save: bool) {
         self.0
             .send(Command::SessionStart { exercises, save })
             .await
@@ -233,7 +236,7 @@ impl Session {
     }
 
     #[tracing::instrument(skip_all, fields(exercises, save))]
-    async fn session_start(&mut self, exercises: Vec<RequestExerciseReps>, save: bool) {
+    async fn session_start(&mut self, exercises: Vec<JetsonExerciseRequest>, save: bool) {
         // There is already a session active!
         if let Some(_) = &self.session {
             tracing::warn!("invalid state for session start");
@@ -256,6 +259,7 @@ impl Session {
                         descriptor.name,
                         descriptor.description,
                         e.num_repetitions,
+                        &[]
                     )
                     .expect("Unable to create LuaExercise"),
                 );
@@ -279,8 +283,8 @@ impl Session {
 
         // Start new session on the ui
         self.ui
-            .send(crate::ui::Command::SessionStart {
-                exercises_count: session.exercises.len(),
+            .send(ui::Command::SessionStart {
+                exercises_count: session.exercises.len() as u32,
                 exercise_ids: session.exercises.iter().map(|e| e.name.clone()).collect(),
                 resolution: (1280, 720), //TODO: Make dynamic
                 frame_rate: 30,          //TODO: Make dynamic
@@ -289,7 +293,7 @@ impl Session {
 
         // Start first exercise
         self.ui
-            .send(crate::ui::Command::ExerciseStart {
+            .send(ui::Command::ExerciseStart {
                 exercise_id: session.current_exercise_name(),
                 repetitions_target: session.exercises[0].repetitions_target,
             })
@@ -314,13 +318,15 @@ impl Session {
         if let Some(session) = &self.session {
             // Notify other actors to stop
             self.pose.inference_end().await;
-            self.ui.send(crate::ui::Command::SessionEnd).await;
+            self.ui.send(ui::Command::SessionEnd).await;
             self.ignore_frames = true;
 
+            /*
             // Save to database
             self.firebase
-                .store_session(model::Session::from(session))
+                .store_session(SessionStore::from(session))
                 .await;
+            */
 
             self.session = None;
             tracing::info!("session ended");
@@ -340,13 +346,6 @@ impl Session {
     #[tracing::instrument(skip_all)]
     async fn run_session(mut self) {
         // TODO: use real deltatime
-
-        self.ui
-            .send(crate::ui::Command::ExerciseStart {
-                exercise_id: (),
-                repetitions_target: (),
-            })
-            .await;
 
         const DELTATIME: f32 = 0.2;
         loop {
@@ -377,15 +376,17 @@ impl Session {
 
                         //println!("{:?}", output);
 
-                        // Send progress to UI
-                        self.ui
-                            .send(crate::ui::Command::ExerciseUpdate {
-                                metadata: (),
-                                skeleton: capture,
-                                repetitions: (),
-                                frame: (),
-                            })
-                            .await;
+                        if let Some(output) = output {
+                            // Send progress to UI
+                            self.ui
+                                .send(ui::Command::ExerciseUpdate {
+                                    metadata: Some(output.metadata),
+                                    skeleton: capture.pose.kp2d,
+                                    repetitions: repetitions,
+                                    frame: capture.frame,
+                                })
+                                .await;
+                        }
 
                         match (finished, completed) {
                             // Close session
@@ -401,10 +402,13 @@ impl Session {
                             (true, false) => {
                                 tracing::info!("moving to next exercise");
                                 self.pose.inference_end().await;
-                                self.ui.send(crate::ui::Command::ExerciseEnd).await;
+                                self.ui.send(ui::Command::ExerciseEnd).await;
 
                                 self.pose.inference_start().await;
-                                self.ui.send(crate::ui::Command::ExerciseStart { exercise_id: (), repetitions_target: () }).await;
+                                self.ui.send(ui::Command::ExerciseStart { 
+                                    exercise_id: session.current_exercise_name(), 
+                                    repetitions_target: session.exercises[session.current_idx].repetitions_target 
+                                }).await;
                             },
                             _ => {}
                         }
