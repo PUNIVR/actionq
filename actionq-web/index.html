@@ -17,7 +17,8 @@
     <div class="overlay" id="overlayExercise">
         <p class="text-exercise-overlay archivo-black-regular" id="overlayExerciseText">Ottimo!</p>
         <div class="overlay-slider-container">
-            <div class="slider" id="exerciseSlider">Esercizi</div>
+            <div class="slider archivo-black-regular" id="exerciseSlider">
+            </div>
         </div>
     </div>
     <div class="overlay" id="overlayHomepage">
@@ -30,11 +31,17 @@
             </div>
             <div class="main">
                 <div class="video-stream">
-                    <canvas class="stream" width="1280" height="720" id="streamCanvas"></canvas>
-                    <div class="slider-container">
-                        <div class="slider open-sans" id="repSlider">RIPETIZIONI</div>
+                    <div class="stream">
+                        <canvas class="stream" width="1280" height="720" id="streamCanvas"></canvas>
                     </div>
-                    <div class="exercises open-sans" id="exerciseCounter">ESERCIZI</div>
+                    <div class="status-container">
+                        <div class="slider-container">
+                            <div class="slider archivo-black-regular" id="repSlider">
+                                <p id="repSliderText">TEXT</p>
+                            </div>
+                        </div>
+                        <div class="exercises archivo-black-regular" id="exerciseCounter">TEXT</div>
+                    </div>
                 </div>
                 <div class="video-reference">
                     <video

@@ -116,9 +116,8 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    align-items: center;
-
-    position: relative;
+    align-items: flex-start;
+    gap: 20px;
 }
 
 .stream {
@@ -131,19 +130,24 @@ body {
     position: relative;
 }
 
+.status-container {
+    width: 100%;
+    height: 5vh;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
 .exercises {
-    background-color: #E3E3E3;
+    background-color: #b6b5b5;
     border-radius: 30px;
 
     font-size: 2vh;
 
-    position: absolute;
-    width: 20%;
-    height: 10%;
-    bottom: 0px;
-    right: 20px;
-
-    transform: translate(0%, 50%);
+    width: 30%;
+    height: 100%;
 
     display: flex;
     justify-content: center;
@@ -151,19 +155,14 @@ body {
 }
 
 .slider-container {
-    background-color: #E3E3E3;
+    background-color: #b6b5b5;
     border-radius: 30px;
 
     font-size: 1.5vh;
 
-    position: absolute;
     padding: 10px;
-    width: 60%;
-    height: 10%;
-    bottom: 0px;
-    left: 20px;
-
-    transform: translate(0%, 50%);
+    width: 100%;
+    height: 100%;
 }
 
 .overlay-slider-container {
@@ -184,12 +183,17 @@ body {
     transition: 0.2s;
     /* slider velocity */
 
-    width: 20%;
+    width: 10%;
     height: 100%;
 
     display: flex;
-    justify-content: center;
+    justify-content: right;
     align-items: center;
+    padding-right: 20px;
+}
+
+.slider p {
+    text-align: right;
 }
 
 .text-exercise-overlay {

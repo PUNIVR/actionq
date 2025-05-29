@@ -7,6 +7,7 @@ const ctx = canvas.getContext("2d");
 const referenceVideo = document.getElementById("referenceVideo");
 
 // Repetition slider and text
+const repSliderText = document.getElementById("repSliderText");
 const repSlider = document.getElementById("repSlider");
 
 // Set current exercise text
@@ -37,7 +38,7 @@ function handleExerciseStart(msg) {
     currentExerciseId = msg.exercise_id;
 
     sessionExerciseNum += 1;
-    exerciseCounter.textContent = `Esercizio ${sessionExerciseNum} / ${sessionExercisesCount}`;
+    exerciseCounter.textContent = `Esercizio n. ${sessionExerciseNum}`;
 
     // Play video
     if (msg.exercise_id !== undefined) {
@@ -193,9 +194,9 @@ function handleExerciseUpdate(msg) {
 
     // If it contains a repetition count, update it
     if (msg.repetitions !== undefined) {
-        var repPercentage = 80.0 / currentRepetitionTarget * msg.repetitions;
-        repSlider.style.width = `${20 + repPercentage}%`;
-        repSlider.textContent = `${msg.repetitions} / ${currentRepetitionTarget}`;
+        repSliderText.textContent = `${msg.repetitions} / ${currentRepetitionTarget}`;
+        var repPercentage = 90.0 / currentRepetitionTarget * msg.repetitions;
+        repSlider.style.width = `${10 + repPercentage}%`;
     }
 
     // If it contains metadata, use it
@@ -230,9 +231,9 @@ function showOverlay(text, duration = 2500) {
     }, duration);
 
     // Increase exercise bar
-    var sliderPercentage = 80.0 / sessionExercisesCount * sessionExerciseNum;
+    var sliderPercentage = 90.0 / sessionExercisesCount * sessionExerciseNum;
     setTimeout(() => {
-        exerciseSlider.style.width = `${20 + sliderPercentage}%`; 
+        exerciseSlider.style.width = `${10 + sliderPercentage}%`; 
     }, 1000);
 }
 
