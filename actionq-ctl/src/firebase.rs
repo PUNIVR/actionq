@@ -40,7 +40,7 @@ impl SessionCtrl {
 
     /// Modify the command document
     async fn update_command(&self, request: JetsonRequest) {
-        let dedup_id: String = format!("{}", Uuid::new_v4()); 
+        //let dedup_id: String = format!("{}", Uuid::new_v4()); 
         let _: JetsonInterface = self
             .db
             .fluent()
@@ -50,7 +50,7 @@ impl SessionCtrl {
             .object(&JetsonInterface {
                 request: Some(IdempotencyWrap::<JetsonRequest> {
                     inner: request,
-                    dedup_id
+          //          dedup_id
                 }),
                 response: None,
             })

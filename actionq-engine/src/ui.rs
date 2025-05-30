@@ -84,7 +84,7 @@ impl UiClient {
 
         // Spawn firefox in kiosk mode
         let kiosk = std::process::Command::new("firefox")
-            .args([&format!("http://{}:8080", UI_URL)])
+            .args(["--kiosk", &format!("http://{}:8080", UI_URL)])
             .spawn().expect("unable to spawn ui kiosk");
 
         tracing::info!("kiosk spawned");

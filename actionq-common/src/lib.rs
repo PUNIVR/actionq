@@ -66,7 +66,6 @@ pub struct CaptureData {
 
 /// Describe an exercise request
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 pub struct JetsonExerciseRequest {
     /// Overwrites default parameters of the exercise
     pub parameters: Option<HashMap<String, f32>>,
@@ -78,7 +77,7 @@ pub struct JetsonExerciseRequest {
 
 /// Possible requests for the Jetson
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "Type", rename_all_fields = "PascalCase")]
+#[serde(tag = "type")]
 pub enum JetsonRequest {
     /// Starts a new session, if one is already in progress then connect to that
     /// session without starting a new one
@@ -102,7 +101,7 @@ pub enum JetsonRequest {
 
 /// Possible responses of the Jetson
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all_fields = "PascalCase")]
+#[serde(tag = "type")]
 pub enum JetsonResponse { }
 
 /// Contains all objects used only in the database
@@ -112,9 +111,8 @@ pub mod firebase {
     
     /// Wrapper for a Jetson request or response with an unique Id to prevent idempotency removal of events
     #[derive(Debug, Serialize, Deserialize)]
-    #[serde(rename_all = "PascalCase")]
     pub struct IdempotencyWrap<T> {
-        pub dedup_id: String,
+        //pub dedup_id: String,
         #[serde(flatten)]
         pub inner: T,
     }
@@ -123,7 +121,6 @@ pub mod firebase {
     /// Descriptor of an exercise
     /// NOTE: The default parameters are not included, are they are present in the FSM script
     #[derive(Debug, Serialize, Deserialize)]
-    #[serde(rename_all = "PascalCase")]
     pub struct ExerciseTemplate {
         /// Id of the exercise
         pub name: String,
@@ -135,7 +132,6 @@ pub mod firebase {
 
     /// Jetson interface to handle events and errors
     #[derive(Debug, Serialize, Deserialize)]
-    #[serde(rename_all = "PascalCase")]
     pub struct JetsonInterface {
         /// Buffer where requests are written by the clients
         pub request: Option<IdempotencyWrap<JetsonRequest>>,
@@ -145,7 +141,6 @@ pub mod firebase {
 
     /// Descriptor of completed session of exercises
     #[derive(Debug, Serialize, Deserialize)]
-    #[serde(rename_all = "PascalCase")]
     pub struct SessionStore {
         /// Exercises to do during the session
         pub exercises: Vec<ExerciseStore>,
@@ -156,7 +151,6 @@ pub mod firebase {
 
     /// Descriptor of a completed exercise
     #[derive(Debug, Serialize, Deserialize)]
-    #[serde(rename_all = "PascalCase")]
     pub struct ExerciseStore {
         /// Number of repetitions completed
         pub num_repetitions_done: u32,

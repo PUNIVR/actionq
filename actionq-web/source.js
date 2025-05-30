@@ -81,6 +81,7 @@ function drawWidgets() {
                     ctx.stroke();
                     break;
 
+                /*
                 case "Segment":
 		    console.log("rendering segment!");
                     var from = remapCoords(widget.from);
@@ -92,7 +93,6 @@ function drawWidgets() {
                     ctx.stroke();
                     break;
 
-                /*
                 case "Arc":
                     var center = remapCoords(data.center);
                     
