@@ -63,7 +63,6 @@ function remapCoords(position) {
 
 function drawWidgets() {
     var rect = canvas.getBoundingClientRect();
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
     currentWidgets.forEach((widget, index) => {
         ctx.save();
 
@@ -180,7 +179,6 @@ function playAudio(relativeNewSrc, delay = 1250) {
 function handleExerciseUpdate(msg) {
     console.log("state: exercise update");
 
-    /*
     // If it contains a frame, display it
     if (msg.frame) {
         const byteArray = new Uint8Array(msg.frame);
@@ -195,7 +193,6 @@ function handleExerciseUpdate(msg) {
             URL.revokeObjectURL(url);
         };
     }
-    */
 
     // If it contains a repetition count, update it
     if (msg.repetitions !== undefined) {

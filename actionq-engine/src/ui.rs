@@ -64,7 +64,7 @@ impl UiProxy {
 fn compress_frame(bytes: &[u8], w: u32, h: u32) -> Vec<u8> {
     let mut buffer = std::io::Cursor::new(Vec::new());
     let mut encoder = JpegEncoder::new_with_quality(&mut buffer, 80);
-    encoder.encode(bytes, w, h, ExtendedColorType::Rgba8).unwrap();
+    encoder.encode(bytes, w, h, ExtendedColorType::Rgb8).unwrap();
     buffer.into_inner()
 }
 
@@ -110,7 +110,9 @@ impl UiClient {
             let cmd = match cmd {
                 Command::ExerciseUpdate { metadata, skeleton, repetitions, frame } => Command::ExerciseUpdate {
                     metadata, skeleton, repetitions,
-                    frame: vec![] //compress_frame(&frame, 1280, 720) // TODO: make resolution dynamic
+                    frame: compress_frame(&frame.chunks(4)
+                            .flat_map(|c| vec![c[2], c[1], c[0]])
+                            .collect::<Vec<u8>>(), 1280, 720) // TODO: make resolution dynamic
                 },
                 _ => cmd,
             };
