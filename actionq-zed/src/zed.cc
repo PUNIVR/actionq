@@ -9,7 +9,7 @@ static sl::BodyTrackingRuntimeParameters g_body_params;
 void initialize() {
 
 	sl::InitParameters init_parameters;
-    init_parameters.camera_resolution = sl::RESOLUTION::AUTO;
+    init_parameters.camera_resolution = sl::RESOLUTION::HD720;
     init_parameters.depth_mode = sl::DEPTH_MODE::NEURAL;
     init_parameters.coordinate_units = sl::UNIT::METER;
 	init_parameters.sdk_verbose = true;
@@ -70,8 +70,8 @@ CaptureData extract() {
 		// Cannot use this, size is not updated
 		//std::memcpy(result.frame.data(), backbuffer.getPtr<sl::uchar1>(), result.frame.size());
 
-		//printf("buffer resolution: %d x %d, channels: %d\n", 
-		//	backbuffer.getWidth(), backbuffer.getHeight(), backbuffer.getChannels());
+		printf("buffer resolution: %d x %d, channels: %d\n", 
+			backbuffer.getWidth(), backbuffer.getHeight(), backbuffer.getChannels());
 
 		// Get skeleton
 		g_zed.retrieveBodies(bodies, g_body_params);

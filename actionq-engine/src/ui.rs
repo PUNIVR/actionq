@@ -3,12 +3,21 @@
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::net::{TcpStream, TcpListener};
+use tungstenite::{accept, WebSocket};
+use tokio_tungstenite::{accept_async};
+use futures_util::StreamExt;
+use futures_util::SinkExt;
+
+use image::codecs::jpeg::JpegEncoder;
+use imageproc::image::ExtendedColorType;
 
 use actionq_common::*;
 use actionq_motion::{LuaExercise, StateEvent, StateOutput, StateWarning, Widget, Metadata};
 
 /// Contains all commands understood by the ui
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum Command {
     SessionStart {
         /// Number of exercises
@@ -51,14 +60,65 @@ impl UiProxy {
     }
 }
 
+// Compress frame into jpeg
+fn compress_frame(bytes: &[u8], w: u32, h: u32) -> Vec<u8> {
+    let mut buffer = std::io::Cursor::new(Vec::new());
+    let mut encoder = JpegEncoder::new_with_quality(&mut buffer, 80);
+    encoder.encode(bytes, w, h, ExtendedColorType::Rgba8).unwrap();
+    buffer.into_inner()
+}
+
+// URL of the http server
+const UI_URL: &str = "127.0.0.1";
+
 struct UiClient {}
 impl UiClient {
     #[tracing::instrument(skip_all)]
     pub async fn run_ui_client(self, mut rx: Receiver<Command>) {
+        
+        // Create TCP server for the ui client
+        let listener = TcpListener::bind(&format!("{}:9090", UI_URL)).await
+            .expect("unable to create ui server");
+           
+        tracing::info!("TCP listener ready");
+
+        // Spawn firefox in kiosk mode
+        let kiosk = std::process::Command::new("firefox")
+            .args([&format!("http://{}:8080", UI_URL)])
+            .spawn().expect("unable to spawn ui kiosk");
+
+        tracing::info!("kiosk spawned");
+
+        // Accept kiosk TCP connection
+        let (stream, _) = listener.accept().await
+            .expect("unable to connect to kiosk");
+
+        tracing::info!("kiosk connected to TCP");
+
+        // Upgrade to WebSocket connection
+        let stream = accept_async(stream).await
+            .expect("unable to upgrade kiosk connection from TCP to WebSocket");
+
+        tracing::info!("kiosk connected to WebSocket");
+
         // Get new messages if available
-        if let Some(cmd) = rx.recv().await {
+        let (mut ui_write, _ui_read) = stream.split();
+        while let Some(cmd) = rx.recv().await {
+            tracing::info!("forwarding ui command...");
+
+            // Compress video frame
+            let cmd = match cmd {
+                Command::ExerciseUpdate { metadata, skeleton, repetitions, frame } => Command::ExerciseUpdate {
+                    metadata, skeleton, repetitions,
+                    frame: vec![] //compress_frame(&frame, 1280, 720) // TODO: make resolution dynamic
+                },
+                _ => cmd,
+            };
+
             // Forward to websocket
-            // TODO
+            let cmd = serde_json::to_string(&cmd).expect("unable to serialize ui command");
+            ui_write.send(tungstenite::Message::Text(cmd)).await
+                .expect("unable to forward command to kiosk");
         }
     }
 }

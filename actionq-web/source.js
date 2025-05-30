@@ -33,6 +33,7 @@ var currentAudio = null;
 var audioDelayTimeout = null;
 
 function handleExerciseStart(msg) {
+    console.log("state: exercise start");
 
     currentRepetitionTarget = msg.repetitions_target;
     currentExerciseId = msg.exercise_id;
@@ -55,13 +56,14 @@ function handleExerciseStart(msg) {
 
 function remapCoords(position) {
     return [
-        position[0] / 640 * 1280,
-        position[1] / 480 * 720
+        position[0] / 1280 * 1280,
+        position[1] / 720 * 720
     ];
 }
 
 function drawWidgets() {
     var rect = canvas.getBoundingClientRect();
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     currentWidgets.forEach((widget, index) => {
         ctx.save();
 
@@ -69,10 +71,10 @@ function drawWidgets() {
         ctx.fillStyle = 'white';
         ctx.lineWidth = 4;
 
-        for (const [type, data] of Object.entries(widget)) {
-            switch (type) {
+            switch (widget.widget) {
                 case "Circle":
-                    var position = remapCoords(data.position);
+		    console.log("rendering circle!");
+                    var position = remapCoords(widget.position);
 
                     ctx.beginPath();
                     ctx.arc(position[0], position[1], 10.0, 0, Math.PI * 2);
@@ -80,8 +82,9 @@ function drawWidgets() {
                     break;
 
                 case "Segment":
-                    var from = remapCoords(data.from);
-                    var to = remapCoords(data.to);
+		    console.log("rendering segment!");
+                    var from = remapCoords(widget.from);
+                    var to = remapCoords(widget.to);
 
                     ctx.beginPath();
                     ctx.moveTo(from[0], from[1]);
@@ -100,7 +103,7 @@ function drawWidgets() {
                 */
 
                 case "HLine":
-                    var y = data.y / 480 * 720;
+                    var y = widget.y / 480 * 720;
 
                     ctx.beginPath();
                     ctx.moveTo(0, y);
@@ -109,7 +112,7 @@ function drawWidgets() {
                     break
 
                 case "VLine":
-                    var x = data.x / 640 * 1280;
+                    var x = widget.x / 640 * 1280;
 
                     ctx.beginPath();
                     ctx.moveTo(x, 0);
@@ -121,7 +124,6 @@ function drawWidgets() {
                     //console.warn("Unknown widget type:", type);
                     break;
             }
-        }
         ctx.restore();
     });
 
@@ -176,7 +178,9 @@ function playAudio(relativeNewSrc, delay = 1250) {
 }
 
 function handleExerciseUpdate(msg) {
+    console.log("state: exercise update");
 
+    /*
     // If it contains a frame, display it
     if (msg.frame) {
         const byteArray = new Uint8Array(msg.frame);
@@ -191,6 +195,7 @@ function handleExerciseUpdate(msg) {
             URL.revokeObjectURL(url);
         };
     }
+    */
 
     // If it contains a repetition count, update it
     if (msg.repetitions !== undefined) {
@@ -238,11 +243,13 @@ function showOverlay(text, duration = 2500) {
 }
 
 function handleExerciseEnd(msg) {
+    console.log("state: exercise end");
     showOverlay("Ottimo!");
     stopAudio();
 }
 
 function handleSessionStart(msg) {
+    console.log("state: session end");
 
     sessionExercisesCount = msg.exercises_count;
     sessionExerciseNum = 0;
@@ -254,10 +261,10 @@ function handleSessionStart(msg) {
 showHomepage();
 
 // Connect to the ActionQ server
-const socket = new WebSocket("ws://127.0.0.1:8080");
+const socket = new WebSocket("ws://127.0.0.1:9090");
 socket.onmessage = (event) => {
     const msg = JSON.parse(event.data);
-    //console.log(msg);
+    console.log(msg);
 
     switch (msg.type) {
         case "SessionStart": handleSessionStart(msg); break;
