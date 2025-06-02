@@ -23,7 +23,7 @@ async fn main() {
     }).expect("unable to set CTRL-C handler");
 
     let mut exercise = LuaExercise::from_file(
-        std::path::Path::new("exercises/ginocchia_3D.lua"), 
+        std::path::Path::new("exercises/demo/alzata_3D.lua"), 
         "curl".to_string(), 
         "".to_string(), 
         2,
@@ -57,7 +57,7 @@ async fn main() {
                         draw_line(from.x, from.y, to.x, to.y, 10.0, WHITE);
                     },
                     Widget::Arc { center, radius, angle, delta } => {
-                        println!("Arc drawing not implemented!");
+                        draw_arc(center.x, center.y, 30, *radius, *angle, 5.0, *delta, RED);
                     },
                     Widget::VLine { x } => {
                         draw_line(*x, 0.0, *x, screen_height(), 10.0, WHITE);
