@@ -68,11 +68,10 @@ function drawWidgets() {
 
         ctx.strokeStyle = 'white';
         ctx.fillStyle = 'white';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 5;
 
             switch (widget.widget) {
                 case "Circle":
-		    console.log("rendering circle!");
                     var position = remapCoords(widget.position);
 
                     ctx.beginPath();
@@ -80,9 +79,7 @@ function drawWidgets() {
                     ctx.stroke();
                     break;
 
-                /*
                 case "Segment":
-		    console.log("rendering segment!");
                     var from = remapCoords(widget.from);
                     var to = remapCoords(widget.to);
 
@@ -92,17 +89,47 @@ function drawWidgets() {
                     ctx.stroke();
                     break;
 
-                case "Arc":
-                    var center = remapCoords(data.center);
-                    
+		/*
+                case "Arc": // counter-clockwise
+                    var center = remapCoords(widget.center);
+
+                    var finalAngle = widget.angle + widget.delta;
+
                     ctx.beginPath();
-                    ctx.arc(center[0], center[1], data.radius, data.from % 360, data.to % 360);
+                    ctx.arc(center[0], center[1], widget.radius, widget.angle, finalAngle, true);
                     ctx.stroke();
-                    break;
-                */
+
+		    // Draw arrow-head
+		    var x = center[0] + cos(finalAngle) * widget.radius;
+		    var y = center[1] + sin(finalAngle) * widget.radius;
+			  
+		    ctx.beginPath();
+		    ctx.rect(x - 10.0, y - 10.0, 20.0, 20.0);
+		    ctx.fill();
+		    ctx.stroke();
+
+		    ctx.beginPath();
+		    ctx.moveTo(x, y);
+		    ctx.lineTo(
+			    x + cos(finalAngle + 90.0 - 30.0) * 20.0, 
+			    y + sin(finalAngle + 90.0 - 30.0) * 20.0
+		    );
+		    ctx.stroke();
+		    
+		    ctx.beginPath();
+		    ctx.moveTo(x, y);
+		    ctx.lineTo(
+			    x + cos(finalAngle + 90.0 + 30.0) * 20.0, 
+			    y + sin(finalAngle + 90.0 + 30.0) * 20.0
+		    );
+		    ctx.stroke();
+                    
+		    break;
+		*/
+			    
 
                 case "HLine":
-                    var y = widget.y / 480 * 720;
+                    var y = widget.y;
 
                     ctx.beginPath();
                     ctx.moveTo(0, y);
@@ -111,7 +138,7 @@ function drawWidgets() {
                     break
 
                 case "VLine":
-                    var x = widget.x / 640 * 1280;
+                    var x = widget.x;
 
                     ctx.beginPath();
                     ctx.moveTo(x, 0);
@@ -249,6 +276,7 @@ function handleSessionStart(msg) {
     console.log("state: session end");
 
     sessionExercisesCount = msg.exercises_count;
+    exerciseSlider.style.width = `0%`;
     sessionExerciseNum = 0;
 
     hideHomepage();

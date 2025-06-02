@@ -22,17 +22,15 @@ enum ArgsContext {
     /// Run singe exercise
     Exercise {
         /// Id of the root patient inside the database
+        #[arg(default_value_t = String::from("VsBYJPdvik35pFYthJgx"))]
         patient: String,
         /// Optional id of the target patient (RSA mode)
         #[arg(long)]
         target_patient: Option<String>,
-        /// Id of the exercise inside the database
-        exercise: String,
-        /// Number of repetitions
-        repetitions: u32,
-        /// Runtime parameters
-        #[arg(short = 'p', value_parser = parse_key_val::<String, f32>)]
-        parameters: Vec<(String, f32)>
+        /// Id of the exercise inside the database, the number of repetitions and optional
+        /// parameters
+        #[arg(value_parser = parse_exercise)]
+        exercises: Vec<(String, u32, Vec<(String, f32)>)>,
     },
 
     Reset {
@@ -70,8 +68,34 @@ where
 {
     let pos = s
         .find('=')
-        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{s}`"))?;
+        .ok_or_else(|| format!("invalid KEY:value: no `=` found in `{s}`"))?;
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
+}
+
+fn parse_exercise(s: &str) -> Result<(String, u32, Vec<(String, f32)>), Box<dyn Error + Send + Sync + 'static>> {
+    if let Some(mid) = s.find('@') {
+        let exercise = &s[..mid];
+        let params = &s[mid+1..];
+
+        let mid = exercise.find(':').ok_or_else(|| format!("invalid exercise:reps, o ':' found in `{exercise}`"))?;
+        let reps = exercise[mid + 1..].parse()?;
+        let exid = exercise[..mid].parse()?;
+       
+        let mut p: Vec<(String, f32)> = Vec::new();
+        for element in params.split(',') {
+            let mid = element.find(':').ok_or_else(|| format!("invalid param:value, o ':' found in `{element}`"))?;
+            p.push((
+                element[..mid].parse()?,
+                element[mid+1..].parse()?
+            ));
+        }
+
+        Ok((exid, reps, p))
+
+    } else {
+        let mid = s.find(':').ok_or_else(|| format!("invalid exercise:reps, o ':' found in `{s}`"))?;
+        Ok((s[..mid].parse()?, s[mid + 1..].parse()?, vec![]))
+    }
 }
 
 fn main() {
@@ -89,23 +113,13 @@ fn main() {
         ArgsContext::Exercise {
             patient,
             target_patient,
-            exercise,
-            repetitions,
-            parameters,
+            exercises,
         } => {
+            dbg!(&exercises);
+
             let ctrl =
             sync_async!(rt, SessionCtrl::new(&patient, &args.project).await);
-
-            let parameters = if parameters.len() != 0 {
-                Some(parameters.into_iter().collect())
-            }
-            else {
-                None
-            };
-
-            dbg!(&parameters);
-            sync_async!(rt, ctrl.run_exercise(
-                exercise, repetitions, target_patient, parameters).await);
+            sync_async!(rt, ctrl.run_multiple_exercises(target_patient, exercises).await);
         }
         ArgsContext::Reset { patient } => {
             let ctrl =

@@ -64,6 +64,26 @@ impl SessionCtrl {
         self.update_command(JetsonRequest::SetPlayState { running }).await;
     }
 
+    // Run multiple exercises
+    pub async fn run_multiple_exercises(&self, patient_id: Option<String>, exercises: Vec<(String, u32, Vec<(String, f32)>)>) {
+        self.update_command(JetsonRequest::SessionStart {
+            patient_id,
+            save: false,
+            exercises: exercises.into_iter()
+                .map(|(exercise_id, num_repetitions, parameters)| {
+                    let parameters = if parameters.len() != 0 {
+                        Some(parameters.into_iter().collect())
+                    } else { None };
+
+                    JetsonExerciseRequest {
+                        exercise_id,
+                        num_repetitions,
+                        parameters
+                    }
+                }).collect()
+        }).await;
+    }
+
     // Run single exercise
     pub async fn run_exercise(&self, exercise_id: String, num_repetitions: u32, patient_id: Option<String>, 
                               parameters: Option<HashMap<String, f32>>) {

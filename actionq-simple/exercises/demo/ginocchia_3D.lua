@@ -79,6 +79,7 @@ LAST_SIDE = "left"
 -- iniziale corretta.
 function entry(sk, params)
 
+	aq.draw.segment(sk.kp2d.right_knee, sk.kp2d.left_knee)
 	aq.draw.circle(sk.kp2d.right_knee, "RK")
 	aq.draw.circle(sk.kp2d.left_knee, "LK")
 
@@ -97,18 +98,20 @@ end
 function center(sk, params)
 	local delta = knee_delta(sk)
 	
-	aq.draw.segment(sk.kp2d.right_knee, sk.kp2d.right_hip)
-	aq.draw.segment(sk.kp2d.left_knee, sk.kp2d.left_hip)
-
 	-- Deve muovere a destra
 	if LAST_SIDE == "left" then
 		if delta >= params.dist_target then
 			print("center -> right")
 			return aq.state.step("right")
 		end
+
+
+		aq.draw.segment(sk.kp2d.right_knee, sk.kp2d.right_hip)
+		aq.draw.circle(sk.kp2d.right_knee)
+
 		return aq.state.stay({
 			help = "Alza il ginocchio destro",
-			widgets = widgets(sk),
+			--widgets = widgets(sk),
 		})
 	end
 
@@ -119,9 +122,12 @@ function center(sk, params)
 			return aq.state.step("left")
 		end
 
+		aq.draw.segment(sk.kp2d.left_knee, sk.kp2d.left_hip)
+		aq.draw.circle(sk.kp2d.left_knee)
+
 		return aq.state.stay({
 			help = "Alza il ginocchio sinistro",
-			widgets = widgets(sk),
+			--widgets = widgets(sk),
 		})
 	end
 	-- Unreachable
@@ -132,6 +138,7 @@ function right(sk, params)
 
 	aq.draw.circle(sk.kp2d.right_knee, "RK")
 	aq.draw.circle(sk.kp2d.left_knee, "LK")
+	aq.draw.hline(sk.kp2d.left_knee[2])
 
 	LAST_SIDE = "right"
 	if near(0.0, params.center_delta, knee_delta(sk)) then
@@ -149,6 +156,7 @@ function left(sk, params)
 
 	aq.draw.circle(sk.kp2d.right_knee, "RK")
 	aq.draw.circle(sk.kp2d.left_knee, "LK")
+	aq.draw.hline(sk.kp2d.right_knee[2])
 
 	LAST_SIDE = "left"
 	if near(0.0, params.center_delta, knee_delta(sk)) then

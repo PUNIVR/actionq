@@ -100,6 +100,7 @@ function entry(skeleton, params)
 	end
 
 	return aq.state.stay({
+		help = "Distendi le braccia lungo i fianchi",
 		warnings = warnings(skeleton),
 	})
 end
@@ -115,6 +116,7 @@ function down(skeleton, params)
 		})
 	end
 	return aq.state.stay({
+		help = "Porta le braccia sopra la testa",
 		warnings = warnings(skeleton),
 	})
 end
@@ -131,6 +133,7 @@ function up(skeleton, params)
 		})
 	end
 	return aq.state.stay({
+		help = "Distendi le braccia lungo i fianchi",
 		warnings = warnings(skeleton),
 	})
 end

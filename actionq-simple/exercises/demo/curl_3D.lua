@@ -86,6 +86,7 @@ function entry(sk, params)
 
 	--print("entry")
 	return aq.state.stay({
+		help = "Distendi le bracca in orizzontale",
 		warnings = warnings(sk),
 	})
 end
@@ -101,6 +102,7 @@ function down(sk, params)
 		})
 	end
 	return aq.state.stay({
+		help = "Fletti le braccia",
 		warnings = warnings(sk),
 	})
 end
@@ -117,6 +119,7 @@ function up(sk, params)
 		})
 	end
 	return aq.state.stay({
+		help = "Distendi le braccia",
 		warnings = warnings(sk),
 	})
 end
